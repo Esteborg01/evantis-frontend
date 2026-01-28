@@ -1,0 +1,21 @@
+const BASE = import.meta.env.VITE_API_BASE;
+
+export async function teach(payload, apiKey) {
+  const res = await fetch(`${BASE}/teach`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-API-Key": apiKey,
+    },
+    body: JSON.stringify(payload),
+  });
+
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    throw new Error(data.detail || `HTTP ${res.status}`);
+  }
+
+  return data;
+}
+
