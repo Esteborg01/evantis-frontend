@@ -6,44 +6,42 @@ const [token, setToken] = useState("");
 const [loading, setLoading] = useState(false);
 const [result, setResult] = useState(null);
 
+// src/api.js
 const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
+const API_KEY  = import.meta.env.VITE_API_KEY  || "";
+
+// helper para headers estándar
+function withAuthHeaders(token, extra = {}) {
+  const h = { ...extra };
+  if (token) h["Authorization"] = `Bearer ${token}`;
+  if (API_KEY) h["X-API-Key"] = API_KEY;
+  return h;
+}
 
 export async function login(email, password) {
+  // FastAPI OAuth2PasswordBearer espera form-urlencoded: username/password
   const body = new URLSearchParams();
   body.set("username", email);
   body.set("password", password);
 
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded",
-    },
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body,
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || "Error en login");
-  }
-
+  if (!res.ok) throw new Error((await res.text()) || "Error en login");
   return await res.json();
 }
 
 export async function teachJWT(token, payload) {
-  const res = await fetch(`${API_BASE}/teach/jwt`, {
+  const res = await fetch(`${API_BASE}/teach/curriculum`, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`,
-    },
+    headers: withAuthHeaders(token, { "Content-Type": "application/json" }),
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) {
-    const err = await res.text();
-    throw new Error(err || "Error en teach/jwt");
-  }
-
+  if (!res.ok) throw new Error((await res.text()) || "Error en teach/curriculum");
   return await res.json();
 }
 
