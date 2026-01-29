@@ -6,31 +6,27 @@ const [token, setToken] = useState("");
 const [loading, setLoading] = useState(false);
 const [result, setResult] = useState(null);
 
-// src/api.js
+const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 
-// Base URL desde Render / Vite env
-const API_BASE = (import.meta.env.VITE_API_BASE || "").replace(/\/+$/, "");
-
-// Login OAuth2 password flow (form-urlencoded: username + password)
 export async function login(email, password) {
-  if (!API_BASE) throw new Error("VITE_API_BASE no está configurado");
-
-  const form = new URLSearchParams();
-  form.set("username", email);      // email viaja como username
-  form.set("password", password);
+  const body = new URLSearchParams();
+  body.set("username", email);
+  body.set("password", password);
 
   const res = await fetch(`${API_BASE}/auth/login`, {
     method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: form,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded",
+    },
+    body,
   });
 
   if (!res.ok) {
-    const err = await res.text().catch(() => "");
-    throw new Error(err || `Error en login (${res.status})`);
+    const err = await res.text();
+    throw new Error(err || "Error en login");
   }
 
-  return await res.json(); // { access_token, token_type, plan }
+  return await res.json();
 }
 
 export async function teachJWT(token, payload) {
