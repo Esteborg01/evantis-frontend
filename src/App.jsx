@@ -118,6 +118,47 @@ function parseMarkdownToBlocks(md = "") {
   });
 }
 
+/* =========================
+   UI TOKENS (estético / consistente)
+========================= */
+const UI = {
+  shell: {
+    minHeight: "100vh",
+    padding: 18,
+    background: "linear-gradient(180deg, #fafafa, #f4f4f4)",
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+  },
+  container: {
+    maxWidth: 1150,
+    margin: "0 auto",
+    display: "grid",
+    gridTemplateColumns: "380px 1fr",
+    gap: 14,
+    alignItems: "start",
+  },
+  card: {
+    background: "#fff",
+    border: "1px solid #eaeaea",
+    borderRadius: 16,
+    padding: 14,
+    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
+  },
+  h1: { fontSize: 22, fontWeight: 900, margin: 0 },
+  h2: { fontSize: 15, fontWeight: 900, margin: 0 },
+  muted: { fontSize: 12, opacity: 0.75 },
+  row: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
+  input: { width: "100%", padding: 10, borderRadius: 12, border: "1px solid #ddd", outline: "none" },
+  select: { width: "100%", padding: 10, borderRadius: 12, border: "1px solid #ddd", outline: "none" },
+  btn: { padding: "10px 12px", borderRadius: 12, border: "1px solid #111", cursor: "pointer", fontWeight: 900, background: "#111", color: "#fff" },
+  btnGhost: { padding: "10px 12px", borderRadius: 12, border: "1px solid #ddd", cursor: "pointer", fontWeight: 900, background: "#fff" },
+  badge: { padding: "4px 8px", borderRadius: 999, border: "1px solid #e5e5e5", fontSize: 12, background: "#fff" },
+};
+
+function twoColOrOne() {
+  // responsive sin CSS: si es pantalla chica, 1 columna
+  return window.innerWidth < 980 ? "1fr" : "380px 1fr";
+}
+
 export default function App() {
   // =========================
   // AUTH
@@ -1057,713 +1098,756 @@ export default function App() {
     }
   }
 
-  /* =========================
-     GUARD DE ACCESO (FASE 6) — CORRECTO
-     Debe ir DESPUÉS de hooks (useState/useEffect), nunca dentro de helpers.
+    /* =========================
+     UI KIT (inline, sin CSS extra)
+     - Cards, Buttons, Inputs
+     - Layout responsive
   ========================= */
-  if (!token) {
+  const UI = {
+    page: {
+      minHeight: "100vh",
+      background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 60%)",
+      color: "#0f172a",
+      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
+    },
+    shell: { maxWidth: 1180, margin: "0 auto", padding: 18 },
+    topbar: {
+      display: "flex",
+      justifyContent: "space-between",
+      alignItems: "center",
+      gap: 12,
+      padding: "14px 16px",
+      borderRadius: 16,
+      border: "1px solid #e5e7eb",
+      background: "rgba(255,255,255,0.9)",
+      boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
+      position: "sticky",
+      top: 12,
+      backdropFilter: "blur(8px)",
+      zIndex: 10,
+    },
+    brand: { display: "flex", alignItems: "center", gap: 10 },
+    logo: {
+      width: 36,
+      height: 36,
+      borderRadius: 12,
+      background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 60%, #db2777 120%)",
+      boxShadow: "0 10px 20px rgba(37,99,235,0.18)",
+    },
+    title: { fontSize: 16, fontWeight: 800, letterSpacing: 0.2 },
+    subtitle: { fontSize: 12, opacity: 0.7, marginTop: 2 },
+    pillRow: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
+    pill: (tone = "neutral") => ({
+      fontSize: 12,
+      padding: "6px 10px",
+      borderRadius: 999,
+      border: "1px solid #e5e7eb",
+      background:
+        tone === "good"
+          ? "rgba(34,197,94,0.10)"
+          : tone === "warn"
+          ? "rgba(234,179,8,0.12)"
+          : tone === "bad"
+          ? "rgba(239,68,68,0.10)"
+          : "rgba(15,23,42,0.03)",
+      color:
+        tone === "good"
+          ? "#166534"
+          : tone === "warn"
+          ? "#854d0e"
+          : tone === "bad"
+          ? "#991b1b"
+          : "#0f172a",
+    }),
+    grid: {
+      display: "grid",
+      gridTemplateColumns: "360px 1fr",
+      gap: 14,
+      marginTop: 14,
+    },
+    gridMobile: {
+      display: "grid",
+      gridTemplateColumns: "1fr",
+      gap: 14,
+      marginTop: 14,
+    },
+    card: {
+      border: "1px solid #e5e7eb",
+      background: "rgba(255,255,255,0.92)",
+      borderRadius: 16,
+      padding: 14,
+      boxShadow: "0 10px 26px rgba(15, 23, 42, 0.06)",
+    },
+    cardTitle: { fontSize: 13, fontWeight: 800, margin: 0 },
+    cardHint: { fontSize: 12, opacity: 0.72, marginTop: 6, lineHeight: 1.35 },
+    sectionTitle: { fontSize: 13, fontWeight: 800, margin: 0 },
+    row: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
+    field: { display: "grid", gap: 6 },
+    label: { fontSize: 12, opacity: 0.75 },
+    input: {
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid #e5e7eb",
+      outline: "none",
+      background: "#fff",
+      fontSize: 13,
+    },
+    select: {
+      padding: "10px 12px",
+      borderRadius: 12,
+      border: "1px solid #e5e7eb",
+      outline: "none",
+      background: "#fff",
+      fontSize: 13,
+    },
+    textarea: {
+      width: "100%",
+      minHeight: 360,
+      padding: 12,
+      borderRadius: 14,
+      border: "1px solid #e5e7eb",
+      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
+      fontSize: 12.5,
+      lineHeight: 1.5,
+      background: "#fff",
+      whiteSpace: "pre-wrap",
+    },
+    btn: (variant = "primary", disabled = false) => {
+      const base = {
+        padding: "10px 12px",
+        borderRadius: 12,
+        border: "1px solid #e5e7eb",
+        cursor: disabled ? "not-allowed" : "pointer",
+        fontWeight: 800,
+        fontSize: 13,
+        transition: "transform .05s ease, box-shadow .15s ease, opacity .15s ease",
+        opacity: disabled ? 0.55 : 1,
+      };
+      if (variant === "primary") {
+        return {
+          ...base,
+          border: "1px solid rgba(37,99,235,0.25)",
+          background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 55%, #db2777 120%)",
+          color: "#fff",
+          boxShadow: "0 12px 26px rgba(37,99,235,0.20)",
+        };
+      }
+      if (variant === "danger") {
+        return {
+          ...base,
+          background: "rgba(239,68,68,0.10)",
+          border: "1px solid rgba(239,68,68,0.30)",
+          color: "#991b1b",
+        };
+      }
+      return {
+        ...base,
+        background: "rgba(15,23,42,0.03)",
+        color: "#0f172a",
+      };
+    },
+    msg: (tone = "neutral") => ({
+      padding: 12,
+      borderRadius: 14,
+      border: "1px solid #e5e7eb",
+      background:
+        tone === "good"
+          ? "rgba(34,197,94,0.10)"
+          : tone === "bad"
+          ? "rgba(239,68,68,0.08)"
+          : tone === "warn"
+          ? "rgba(234,179,8,0.12)"
+          : "rgba(15,23,42,0.03)",
+      color:
+        tone === "good"
+          ? "#166534"
+          : tone === "bad"
+          ? "#991b1b"
+          : tone === "warn"
+          ? "#854d0e"
+          : "#0f172a",
+      fontSize: 13,
+      lineHeight: 1.35,
+    }),
+    divider: { height: 1, background: "#e5e7eb", margin: "10px 0" },
+    small: { fontSize: 12, opacity: 0.75 },
+  };
+
+  const isNarrow = typeof window !== "undefined" ? window.innerWidth < 980 : false;
+
+  function Banner() {
+    if (!notice && !error && !authStatus) return null;
     return (
-      <div
-        style={{
-          maxWidth: 1100,
-          margin: "0 auto",
-          padding: 16,
-          fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-        }}
-      >
-        <header style={{ marginBottom: 16 }}>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>E-Vantis</div>
-          <div style={{ opacity: 0.7, fontSize: 13 }}>Acceso requerido</div>
-        </header>
-
-        {(notice || error || authStatus) && (
-          <div style={{ marginBottom: 16 }}>
-            {authStatus && (
-              <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}>
-                <b>Estado:</b> {authStatus}
-              </div>
-            )}
-            {notice && (
-              <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}>
-                <b>OK:</b> {notice}
-              </div>
-            )}
-            {error && (
-              <div style={{ padding: 10, border: "1px solid #f2b8b5", background: "#fff5f5", borderRadius: 8 }}>
-                <b>Error:</b> {error}
-              </div>
-            )}
-          </div>
-        )}
-
-        <section style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 14 }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>1) Acceso</h2>
-
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, marginTop: 12 }}>
-            <input
-              placeholder="Email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            />
-
-            <input
-              placeholder="Password"
-              type="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            />
-
-            <button
-              onClick={authMode === "register" ? handleRegister : handleLogin}
-              style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer", fontWeight: 700 }}
-            >
-              {authMode === "register" ? "Crear cuenta" : "Login"}
-            </button>
-          </div>
-          <div style={{ marginTop: 12, fontSize: 14, opacity: 0.85 }}>
-            {authMode === "login" ? (
-              <span>
-                ¿No tienes cuenta?{" "}
-                <button
-                  type="button"
-                  onClick={() => setAuthMode("register")}
-                  style={{ background: "transparent", border: "none", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700 }}
-                >
-                  Crear cuenta
-                </button>
-              </span>
-            ) : (
-              <span>
-                ¿Ya tienes cuenta?{" "}
-                <button
-                  type="button"
-                  onClick={() => setAuthMode("login")}
-                  style={{ background: "transparent", border: "none", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700 }}
-                >
-                  Iniciar sesión
-                </button>
-              </span>
-            )}
-          </div>
-        </section>
-
-        <footer style={{ marginTop: 18, opacity: 0.6, fontSize: 12 }}>
-          E-Vantis — Inicia sesión para acceder al contenido.
-        </footer>
+      <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+        {authStatus && <div style={UI.msg("neutral")}><b>Estado:</b> {authStatus}</div>}
+        {notice && <div style={UI.msg("good")}><b>OK:</b> {notice}</div>}
+        {error && <div style={UI.msg("bad")}><b>Error:</b> {error}</div>}
       </div>
     );
   }
-   return (
-    <div
-      style={{
-        maxWidth: 1100,
-        margin: "0 auto",
-        padding: 16,
-        fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-      }}
-    >
-      <header
-        style={{
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "baseline",
-          gap: 12,
-          marginBottom: 16,
-        }}
-      >
-        <div>
-          <div style={{ fontSize: 22, fontWeight: 700 }}>E-Vantis</div>
-          <div style={{ opacity: 0.7, fontSize: 13 }}>
-            Panel operativo — Materia → Tema → Módulo • Guardadas • Chat • PDF Pro/Premium
-          </div>
-          <div style={{ marginTop: 6, fontSize: 12, opacity: 0.75 }}>
-            Plan actual: <b>{me?.plan || "—"}</b>{" "}
-            {!hasPro && <span style={{ opacity: 0.75 }}>•</span>}
-          </div>
-          {usage?.modules && (
-            <div style={{ marginTop: 8, fontSize: 13, opacity: 0.85 }}>
-              <strong>Uso mensual ({usage.yyyymm})</strong>:{" "}
-              lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} ·{" "}
-              exam {usage.modules.exam.used}/{usage.modules.exam.limit} ·{" "}
-              enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} ·{" "}
-              gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
-            </div>
-          )}
-        </div>
 
-        <div style={{ opacity: 0.75, fontSize: 12, textAlign: "right" }}>
-          <div>API: {API_BASE}</div>
-          <div>Curriculum: embebido</div>
-        </div>
-      </header>
-
-      {(notice || error || authStatus) && (
-        <div style={{ marginBottom: 16 }}>
-          {authStatus && (
-            <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}>
-              <b>Estado:</b> {authStatus}
-            </div>
-          )}
-          {notice && (
-            <div style={{ padding: 10, border: "1px solid #ddd", borderRadius: 8, marginBottom: 8 }}>
-              <b>OK:</b> {notice}
-            </div>
-          )}
-          {error && (
-            <div style={{ padding: 10, border: "1px solid #f2b8b5", background: "#fff5f5", borderRadius: 8 }}>
-              <b>Error:</b> {error}
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* 1) Acceso */}
-      <section style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "baseline", gap: 12 }}>
-          <h2 style={{ margin: 0, fontSize: 16 }}>1) Acceso</h2>
-          <div style={{ fontSize: 12, opacity: 0.7 }}>
-            {token ? "Token activo" : "Sin sesión"}
-            {me?.plan ? ` • Plan: ${me.plan}` : ""}
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 10, marginTop: 12 }}>
-          <input
-            placeholder="Email"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            disabled={!!token}
-          />
-
-          <input
-            placeholder="Password"
-            type="password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            disabled={!!token}
-          />
-
-          <button
-            onClick={handleLogout}
-            style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer", fontWeight: 700 }}
-          >
-            Logout
-          </button>
-        </div>
-
-        {token && (
-          <div style={{ marginTop: 10, fontSize: 12, opacity: 0.75, wordBreak: "break-all" }}>
-            <b>Bearer:</b> {token.slice(0, 30)}…{token.slice(-18)}
-          </div>
-        )}
-      </section>
-
-      {/* 2) Crear contenido */}
-      <section style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>2) Crear contenido</h2>
-
-        {!hasPro && (
-          <div style={{ marginTop: 10, padding: 10, border: "1px dashed #ddd", borderRadius: 10, fontSize: 12, opacity: 0.85 }}>
-          </div>
-        )}
-
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
-          {/* Materia */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Materia</div>
-            <select
-              value={subjectId}
-              onChange={(e) => setSubjectId(e.target.value)}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            >
-              <option value="">— Selecciona —</option>
-              {subjects.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.name}
-                </option>
-              ))}
-            </select>
-            {selectedSubject && (
-              <div style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
-                Perfil: <b>{selectedSubject.npm_profile}</b> • ID: {selectedSubject.id}
+  /* =========================
+     AUTH SCREEN
+  ========================= */
+  if (!token) {
+    return (
+      <div style={UI.page}>
+        <div style={UI.shell}>
+          <div style={UI.topbar}>
+            <div style={UI.brand}>
+              <div style={UI.logo} />
+              <div>
+                <div style={UI.title}>E-Vantis</div>
+                <div style={UI.subtitle}>Acceso • Registro • Plan Free</div>
               </div>
-            )}
+            </div>
+            <div style={UI.pillRow}>
+              <span style={UI.pill("neutral")}>Curriculum embebido</span>
+              <span style={UI.pill("neutral")}>API: {API_BASE}</span>
+            </div>
           </div>
 
-          {/* Tema */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Tema</div>
-            <select
-              value={topicId}
-              onChange={(e) => setTopicId(e.target.value)}
-              disabled={!subjectId}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            >
-              <option value="">— Selecciona —</option>
-              {blocks.map((b) => (
-                <React.Fragment key={b.id}>
-                  <option value="" disabled>
-                    — {b.name} —
-                  </option>
-                  {(b.macro_topics || []).map((t) => (
-                    <option key={t.id} value={t.id}>
-                      {t.name}
-                    </option>
-                  ))}
-                </React.Fragment>
-              ))}
-            </select>
-          
-          {/* Subtema */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>
-              Subtema
+          <Banner />
+
+          <div style={{ ...UI.card, marginTop: 14, padding: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>Entrar a E-Vantis</h2>
+                <div style={{ marginTop: 6, ...UI.small }}>
+                  {authMode === "register"
+                    ? "Crea tu cuenta y comienza en plan Free."
+                    : "Inicia sesión para generar clases y guardar tu progreso."}
+                </div>
+              </div>
+              <div style={UI.pillRow}>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("login")}
+                  style={UI.btn(authMode === "login" ? "primary" : "ghost", false)}
+                >
+                  Login
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("register")}
+                  style={UI.btn(authMode === "register" ? "primary" : "ghost", false)}
+                >
+                  Crear cuenta
+                </button>
+              </div>
             </div>
 
-            <select
-              value={subtopicId}
-              onChange={(e) => setSubtopicId(e.target.value)}
-              disabled={!selectedTopic || !(selectedTopic.subtopics?.length > 0)}
-              style={{
-                width: "100%",
-                padding: 10,
-                borderRadius: 8,
-                border: "1px solid #ddd",
-              }}
-            >
-              <option value="">
-                {selectedTopic?.subtopics?.length > 0
-                  ? "— Selecciona —"
-                  : "— (Sin subtemas) —"}
-              </option>
+            <div style={UI.divider} />
 
-              {(selectedTopic?.subtopics || []).map((st) => (
-                <option key={st.id} value={st.id}>
-                  {st.name}
-                </option>
-              ))}
-            </select>
-
-            {subtopicId && (
-              <div style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
-                ID subtema:{" "}
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                  {subtopicId}
-                </span>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
+              <div style={UI.field}>
+                <div style={UI.label}>Email</div>
+                <input
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="tu@email.com"
+                  style={UI.input}
+                />
               </div>
-            )}
+              <div style={UI.field}>
+                <div style={UI.label}>Password</div>
+                <input
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="••••••••"
+                  style={UI.input}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+              <button
+                onClick={authMode === "register" ? handleRegister : handleLogin}
+                style={UI.btn("primary", false)}
+              >
+                {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
+              </button>
+              <div style={UI.small}>
+                Al continuar aceptas uso académico. No sustituye juicio clínico.
+              </div>
+            </div>
           </div>
 
-            {selectedTopic && (
-              <div style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
-                ID:{" "}
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                  {selectedTopic.id}
-                </span>
-              </div>
-            )}
-          </div>
-
-          {/* Módulo */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Qué quieres generar</div>
-            <select
-              value={module}
-              onChange={(e) => setModule(e.target.value)}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            >
-              {moduleOptions.map((m) => (
-                <option key={m} value={m}>
-                  {humanLabelModule(m)}
-                </option>
-              ))}
-            </select>
-
-            {!hasPro && npmProfile === "clinicas" && (
-              <div style={{ fontSize: 11, marginTop: 6, opacity: 0.7 }}>
-              </div>
-            )}
-          </div>
-
-          {/* Profundidad */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Profundidad</div>
-            <select
-              value={level}
-              onChange={(e) => setLevel(e.target.value)}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            >
-              <option value="auto">Automática</option>
-              <option value="pregrado">Pregrado</option>
-              <option value="internado">Clínica</option>
-            </select>
+          <div style={{ marginTop: 14, ...UI.small }}>
+            E-Vantis — Plataforma académica. Si tienes problemas, prueba recargar y volver a iniciar sesión.
           </div>
         </div>
+      </div>
+    );
+  }
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10, marginTop: 10 }}>
-          {/* Duración */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Duración (min)</div>
-            <input
-              type="number"
-              value={durationMinutes}
-              onChange={(e) => setDurationMinutes(e.target.value)}
-              min={5}
-              max={120}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            />
+  /* =========================
+     APP SHELL (logueado)
+  ========================= */
+  return (
+    <div style={UI.page}>
+      <div style={UI.shell}>
+        {/* TOPBAR */}
+        <div style={UI.topbar}>
+          <div style={UI.brand}>
+            <div style={UI.logo} />
+            <div>
+              <div style={UI.title}>E-Vantis</div>
+              <div style={UI.subtitle}>Clases • Exámenes • Casos ENARM • Guardadas • Chat</div>
+            </div>
           </div>
 
-          {/* Style */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Estilo</div>
-            <select
-              value={style}
-              onChange={(e) => setStyle(e.target.value)}
-              disabled={module !== "lesson"}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            >
-              <option value="magistral">Magistral</option>
-              <option value="high_yield">High-yield</option>
-              <option value="socratico">Socrático</option>
-            </select>
-          </div>
-
-          {/* Preguntas */}
-          <div>
-            <div style={{ fontSize: 12, opacity: 0.7, marginBottom: 6 }}>Número de preguntas</div>
-            <input
-              type="number"
-              value={numQuestions}
-              onChange={(e) => setNumQuestions(e.target.value)}
-              min={5}
-              max={200}
-              disabled={!(module === "exam" || module === "enarm")}
-              style={{ width: "100%", padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-            />
-          </div>
-
-          {/* Avanzadas */}
-          <div style={{ display: "flex", alignItems: "flex-end" }}>
-            <button
-              onClick={() => setAdvancedOpen((v) => !v)}
-              style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
-            >
-              {advancedOpen ? "Ocultar" : "Mostrar"} opciones avanzadas
+          <div style={UI.pillRow}>
+            <span style={UI.pill("neutral")}>
+              Plan: <b>{me?.plan || "—"}</b>
+            </span>
+            {hasPro ? (
+              <span style={UI.pill("good")}>Pro/Premium</span>
+            ) : (
+              <span style={UI.pill("warn")}>Free</span>
+            )}
+            <button onClick={handleLogout} style={UI.btn("ghost", false)}>
+              Logout
             </button>
           </div>
         </div>
 
-        {advancedOpen && (
-          <div style={{ marginTop: 10, padding: 12, border: "1px dashed #ddd", borderRadius: 10 }}>
-            <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
-              <input
-                type="checkbox"
-                checked={useGuides}
-                onChange={(e) => setUseGuides(e.target.checked)}
-                disabled={module === "gpc_summary"}
-              />
-              <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
-            </label>
-
-            <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-              <input type="checkbox" checked={enarmContext} onChange={(e) => setEnarmContext(e.target.checked)} />
-              <span style={{ fontSize: 13 }}>Confirmo modo ENARM</span>
-            </label>
+        {/* USAGE */}
+        {usage?.modules && (
+          <div style={{ ...UI.card, marginTop: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+              <div>
+                <h3 style={UI.sectionTitle}>Uso mensual ({usage.yyyymm})</h3>
+                <div style={{ marginTop: 6, ...UI.small }}>
+                  lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/
+                  {usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc{" "}
+                  {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
+                </div>
+              </div>
+              <div style={UI.pillRow}>
+                <span style={UI.pill("neutral")}>API: {API_BASE}</span>
+                <span style={UI.pill("neutral")}>Curriculum: embebido</span>
+              </div>
+            </div>
           </div>
         )}
 
-        <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
-          <button
-            onClick={handleGenerate}
-            disabled={isGenerating || quotaBlocked}
-          >
-            {quotaBlocked ? "Cuota mensual alcanzada" : isGenerating ? "Generando…" : "Generar"}
-          </button>
+        <Banner />
 
-          <div style={{ fontSize: 12, opacity: 0.75 }}>
-            Enviarás: <b>Materia</b> ({subjectId || "—"}) • <b>Tema</b> ({topicId || "—"}) • <b>Módulo</b> ({module})
-          </div>
-        </div>
-      </section>
+        {/* LAYOUT */}
+        <div style={isNarrow ? UI.gridMobile : UI.grid}>
+          {/* LEFT: Builder */}
+          <div style={UI.card}>
+            <h3 style={UI.sectionTitle}>Crear contenido</h3>
+            <div style={{ marginTop: 6, ...UI.cardHint }}>
+              Selecciona <b>Materia → Tema → Subtema</b> y después el <b>Módulo</b>. El alumno no necesita ver IDs.
+            </div>
 
-      {/* 3) Resultado */}
-      <section ref={resultRef} style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 14, marginBottom: 16 }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>3) Resultado</h2>
-
-        {!result ? (
-          <div style={{ marginTop: 10, opacity: 0.7 }}>Aún no hay contenido generado o cargado.</div>
-        ) : (
-          <>
-            <div style={{ marginTop: 10, padding: 12, border: "1px solid #eee", borderRadius: 10 }}>
-              <div style={{ fontSize: 16, fontWeight: 700 }}>{result.title}</div>
-
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-                <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} •{" "}
-                <b>Módulo:</b> {humanLabelModule(result.module)} • <b>Profundidad:</b> {humanLabelLevel(result.level)} •{" "}
-                <b>Duración:</b> {result.duration_minutes} min
-              </div>
-
-              <div style={{ marginTop: 6, fontSize: 12, opacity: 0.8 }}>
-                <b>Perfil:</b> {result.npm_profile || "—"} • <b>Session:</b>{" "}
-                <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>{result.session_id}</span>
-              </div>
-
-              <div style={{ marginTop: 10, display: "flex", gap: 10, flexWrap: "wrap" }}>
-                <button
-                  onClick={handleSaveCurrent}
-                  style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer", fontWeight: 700 }}
+            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+              {/* Materia */}
+              <div style={UI.field}>
+                <div style={UI.label}>Materia</div>
+                <select
+                  value={subjectId}
+                  onChange={(e) => setSubjectId(e.target.value)}
+                  style={UI.select}
                 >
-                  Guardar en Mis clases
-                </button>
+                  <option value="">— Selecciona —</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {selectedSubject && (
+                  <div style={UI.small}>
+                    Perfil: <b>{selectedSubject.npm_profile}</b>
+                  </div>
+                )}
+              </div>
 
-                <button
-                  onClick={handleDownloadPDFInstitutional}
-                  disabled={!hasPro}
+              {/* Tema */}
+              <div style={UI.field}>
+                <div style={UI.label}>Tema</div>
+                <select
+                  value={topicId}
+                  onChange={(e) => setTopicId(e.target.value)}
+                  disabled={!subjectId}
+                  style={{ ...UI.select, opacity: subjectId ? 1 : 0.6 }}
+                >
+                  <option value="">— Selecciona —</option>
+                  {blocks.map((b) => (
+                    <React.Fragment key={b.id}>
+                      <option value="" disabled>
+                        — {b.name} —
+                      </option>
+                      {(b.macro_topics || []).map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </React.Fragment>
+                  ))}
+                </select>
+              </div>
+
+              {/* Subtema */}
+              <div style={UI.field}>
+                <div style={UI.label}>Subtema</div>
+                <select
+                  value={subtopicId}
+                  onChange={(e) => setSubtopicId(e.target.value)}
+                  disabled={!selectedTopic || !(selectedTopic.subtopics?.length > 0)}
                   style={{
-                    padding: "8px 12px",
-                    borderRadius: 8,
-                    border: "1px solid #ddd",
-                    cursor: hasPro ? "pointer" : "not-allowed",
-                    fontWeight: 700,
-                    opacity: hasPro ? 1 : 0.6,
+                    ...UI.select,
+                    opacity: selectedTopic && selectedTopic.subtopics?.length > 0 ? 1 : 0.6,
                   }}
                 >
-                  Descargar PDF (Pro/Premium)
-                </button>
+                  <option value="">
+                    {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
+                  </option>
+                  {(selectedTopic?.subtopics || []).map((st) => (
+                    <option key={st.id} value={st.id}>
+                      {st.name}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              {!hasPro && (
-                <div style={{ marginTop: 8, fontSize: 12, opacity: 0.75 }}>
+              {/* Módulo */}
+              <div style={UI.field}>
+                <div style={UI.label}>Qué quieres generar</div>
+                <select value={module} onChange={(e) => setModule(e.target.value)} style={UI.select}>
+                  {moduleOptions.map((m) => (
+                    <option key={m} value={m}>
+                      {humanLabelModule(m)}
+                    </option>
+                  ))}
+                </select>
+                {!hasPro && moduleOptions.includes("gpc_summary") === false && (
+                  <div style={UI.small}>Resumen GPC requiere Pro/Premium.</div>
+                )}
+              </div>
+
+              {/* Profundidad */}
+              <div style={UI.field}>
+                <div style={UI.label}>Profundidad</div>
+                <select value={level} onChange={(e) => setLevel(e.target.value)} style={UI.select}>
+                  <option value="auto">Automática</option>
+                  <option value="pregrado">Pregrado</option>
+                  <option value="internado">Clínica</option>
+                </select>
+              </div>
+
+              <div style={UI.divider} />
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                <div style={UI.field}>
+                  <div style={UI.label}>Duración (min)</div>
+                  <input
+                    type="number"
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(e.target.value)}
+                    min={5}
+                    max={120}
+                    style={UI.input}
+                  />
+                </div>
+
+                <div style={UI.field}>
+                  <div style={UI.label}>Estilo (solo clases)</div>
+                  <select
+                    value={style}
+                    onChange={(e) => setStyle(e.target.value)}
+                    disabled={module !== "lesson"}
+                    style={{ ...UI.select, opacity: module === "lesson" ? 1 : 0.6 }}
+                  >
+                    <option value="magistral">Magistral</option>
+                    <option value="high_yield">High-yield</option>
+                    <option value="socratico">Socrático</option>
+                  </select>
+                </div>
+
+                <div style={UI.field}>
+                  <div style={UI.label}>Número de preguntas</div>
+                  <input
+                    type="number"
+                    value={numQuestions}
+                    onChange={(e) => setNumQuestions(e.target.value)}
+                    min={5}
+                    max={200}
+                    disabled={!(module === "exam" || module === "enarm")}
+                    style={{ ...UI.input, opacity: module === "exam" || module === "enarm" ? 1 : 0.6 }}
+                  />
+                </div>
+
+                <div style={{ ...UI.field, alignContent: "end" }}>
+                  <button
+                    onClick={() => setAdvancedOpen((v) => !v)}
+                    style={UI.btn("ghost", false)}
+                  >
+                    {advancedOpen ? "Ocultar" : "Mostrar"} opciones avanzadas
+                  </button>
+                </div>
+              </div>
+
+              {advancedOpen && (
+                <div style={{ ...UI.msg("neutral"), marginTop: 6 }}>
+                  <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={useGuides}
+                      onChange={(e) => setUseGuides(e.target.checked)}
+                      disabled={module === "gpc_summary"}
+                    />
+                    <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
+                  </label>
+
+                  <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                    <input type="checkbox" checked={enarmContext} onChange={(e) => setEnarmContext(e.target.checked)} />
+                    <span style={{ fontSize: 13 }}>Confirmo modo ENARM</span>
+                  </label>
+                </div>
+              )}
+
+              <button
+                onClick={handleGenerate}
+                disabled={isGenerating || quotaBlocked}
+                style={UI.btn("primary", isGenerating || quotaBlocked)}
+              >
+                {quotaBlocked ? "Cuota mensual alcanzada" : isGenerating ? "Generando…" : "Generar"}
+              </button>
+
+              <div style={UI.small}>
+                Se enviará: <b>{selectedSubject?.name || "Materia"}</b> → <b>{selectedTopic?.name || "Tema"}</b> →{" "}
+                <b>{humanLabelModule(module)}</b>
+              </div>
+            </div>
+          </div>
+
+          {/* RIGHT: Result + Chat + Saved */}
+          <div style={{ display: "grid", gap: 14 }}>
+            {/* RESULT */}
+            <div ref={resultRef} style={UI.card}>
+              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                <div>
+                  <h3 style={UI.sectionTitle}>Resultado</h3>
+                  <div style={{ marginTop: 6, ...UI.small }}>
+                    {result?.session_id ? (
+                      <>
+                        Session:{" "}
+                        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
+                          {result.session_id}
+                        </span>
+                      </>
+                    ) : (
+                      "Aún no hay contenido generado."
+                    )}
+                  </div>
+                </div>
+
+                <div style={UI.pillRow}>
+                  <button
+                    onClick={handleSaveCurrent}
+                    disabled={!result}
+                    style={UI.btn("ghost", !result)}
+                  >
+                    Guardar
+                  </button>
+
+                  <button
+                    onClick={handleDownloadPDFInstitutional}
+                    disabled={!hasPro || !result}
+                    style={UI.btn("ghost", !hasPro || !result)}
+                  >
+                    PDF (Pro/Premium)
+                  </button>
+                </div>
+              </div>
+
+              {result ? (
+                <>
+                  <div style={UI.divider} />
+                  <div style={{ fontSize: 16, fontWeight: 900 }}>{result.title}</div>
+                  <div style={{ marginTop: 6, ...UI.small }}>
+                    <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} • <b>Módulo:</b>{" "}
+                    {humanLabelModule(result.module)} • <b>Profundidad:</b> {humanLabelLevel(result.level)} •{" "}
+                    <b>Duración:</b> {result.duration_minutes} min
+                  </div>
+
+                  <div style={{ marginTop: 12 }}>
+                    <textarea readOnly value={result.lesson || ""} style={UI.textarea} />
+                  </div>
+
+                  {/* CHAT */}
+                  <div style={{ ...UI.card, marginTop: 12, padding: 12 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                      <div>
+                        <div style={{ fontWeight: 900 }}>Chat académico</div>
+                        <div style={UI.small}>Preguntas sobre esta clase (se guarda por sesión).</div>
+                      </div>
+                      <button
+                        onClick={() => setChatOpen((v) => !v)}
+                        style={UI.btn("ghost", false)}
+                      >
+                        {chatOpen ? "Ocultar" : "Abrir"} chat
+                      </button>
+                    </div>
+
+                    {chatOpen && (
+                      <div style={{ marginTop: 10 }}>
+                        <div
+                          ref={chatBoxRef}
+                          style={{
+                            border: "1px solid #e5e7eb",
+                            borderRadius: 14,
+                            padding: 12,
+                            minHeight: 160,
+                            maxHeight: 280,
+                            overflow: "auto",
+                            background: "#fff",
+                          }}
+                        >
+                          {chatMessages.length === 0 ? (
+                            <div style={UI.small}>No hay mensajes aún. Escribe tu primera duda.</div>
+                          ) : (
+                            chatMessages.map((m, idx) => (
+                              <div key={`${m.created_at || "t"}_${idx}`} style={{ marginBottom: 12 }}>
+                                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                  <b>{m.role === "user" ? "Tú" : "E-Vantis"}</b> · {m.created_at}
+                                </div>
+                                <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>
+                                  {m.content}
+                                </div>
+                              </div>
+                            ))
+                          )}
+                        </div>
+
+                        <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "stretch" }}>
+                          <textarea
+                            value={chatInput}
+                            onChange={(e) => setChatInput(e.target.value)}
+                            placeholder="Escribe tu duda… (Enter envía, Shift+Enter salto)"
+                            rows={2}
+                            style={{ ...UI.input, flex: 1, resize: "vertical" }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (!chatStatus) handleChatSend();
+                              }
+                            }}
+                            disabled={!!chatStatus}
+                          />
+                          <button
+                            onClick={handleChatSend}
+                            disabled={!!chatStatus}
+                            style={UI.btn("primary", !!chatStatus)}
+                          >
+                            Enviar
+                          </button>
+                        </div>
+
+                        {chatStatus && <div style={{ marginTop: 8, ...UI.small }}>{chatStatus}</div>}
+                      </div>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <div style={{ marginTop: 10, ...UI.small }}>
+                  Genera una clase/examen/caso para ver el contenido aquí.
                 </div>
               )}
             </div>
 
-            <div style={{ marginTop: 12 }}>
-              <textarea
-                readOnly
-                value={result.lesson || ""}
-                style={{
-                  width: "100%",
-                  minHeight: 340,
-                  padding: 12,
-                  borderRadius: 10,
-                  border: "1px solid #ddd",
-                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-                  fontSize: 12,
-                  lineHeight: 1.4,
-                  whiteSpace: "pre-wrap",
-                }}
-              />
+            {/* SAVED */}
+            <div style={UI.card}>
+              <h3 style={UI.sectionTitle}>Mis clases</h3>
+              <div style={{ marginTop: 6, ...UI.small }}>
+                Guardadas: <b>{filteredSaved.length}</b> (total: {(Array.isArray(savedLessons) ? savedLessons : []).length})
+              </div>
 
-              {/* CHAT */}
-              <div style={{ marginTop: 12, padding: 12, border: "1px solid #eee", borderRadius: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-                  <div>
-                    <div style={{ fontWeight: 700 }}>Chat académico (sobre esta clase)</div>
-                    <div style={{ fontSize: 12, opacity: 0.7 }}>
-                      Session:{" "}
-                      <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                        {result.session_id}
-                      </span>
-                    </div>
-                  </div>
+              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10 }}>
+                <input
+                  placeholder="Buscar…"
+                  value={searchSaved}
+                  onChange={(e) => setSearchSaved(e.target.value)}
+                  style={UI.input}
+                />
 
-                  <button
-                    onClick={() => setChatOpen((v) => !v)}
-                    style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
-                  >
-                    {chatOpen ? "Ocultar chat" : "Abrir chat"}
-                  </button>
-                </div>
+                <select value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)} style={UI.select}>
+                  <option value="all">Materia</option>
+                  {subjects.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
 
-                {chatOpen && (
-                  <div style={{ marginTop: 10 }}>
-                    <div
-                      ref={chatBoxRef}
-                      style={{
-                        border: "1px solid #ddd",
-                        borderRadius: 10,
-                        padding: 10,
-                        minHeight: 160,
-                        maxHeight: 260,
-                        overflow: "auto",
-                        background: "#fff",
-                      }}
-                    >
-                      {chatMessages.length === 0 ? (
-                        <div style={{ opacity: 0.7, fontSize: 12 }}>
-                          No hay mensajes aún. Escribe tu primera duda sobre esta clase.
-                        </div>
-                      ) : (
-                        chatMessages.map((m, idx) => (
-                          <div key={`${m.created_at || "t"}_${idx}`} style={{ marginBottom: 10 }}>
-                            <div style={{ fontSize: 12, opacity: 0.7 }}>
-                              <b>{m.role === "user" ? "Tú" : "E-Vantis"}</b> · {m.created_at}
-                            </div>
-                            <div style={{ whiteSpace: "pre-wrap", fontSize: 13 }}>{m.content}</div>
-                          </div>
-                        ))
-                      )}
-                    </div>
+                <select value={filterSavedModule} onChange={(e) => setFilterSavedModule(e.target.value)} style={UI.select}>
+                  <option value="all">Módulo</option>
+                  <option value="lesson">Clase</option>
+                  <option value="exam">Examen</option>
+                  <option value="enarm">Caso ENARM</option>
+                  <option value="gpc_summary">Resumen GPC</option>
+                </select>
 
-                    <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
-                      <textarea
-                        value={chatInput}
-                        onChange={(e) => setChatInput(e.target.value)}
-                        placeholder="Escribe tu duda sobre esta clase…"
-                        rows={2}
-                        style={{ flex: 1, padding: 10, borderRadius: 8, border: "1px solid #ddd", resize: "vertical" }}
-                        onKeyDown={(e) => {
-                          if (e.key === "Enter" && !e.shiftKey) {
-                            e.preventDefault();
-                            if (!chatStatus) handleChatSend();
-                          }
-                        }}
-                        disabled={!!chatStatus}
-                      />
+                <select value={filterSavedLevel} onChange={(e) => setFilterSavedLevel(e.target.value)} style={UI.select}>
+                  <option value="all">Nivel</option>
+                  <option value="auto">Automática</option>
+                  <option value="pregrado">Pregrado</option>
+                  <option value="internado">Clínica</option>
+                </select>
+              </div>
 
-                      <button
-                        onClick={handleChatSend}
-                        disabled={!!chatStatus}
+              <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                {filteredSaved.length === 0 ? (
+                  <div style={UI.small}>No hay clases guardadas con esos filtros.</div>
+                ) : (
+                  filteredSaved.map((item) => {
+                    const active = item.saved_key && item.saved_key === activeSavedKey;
+                    return (
+                      <div
+                        key={item.saved_key || item.session_id}
                         style={{
-                          padding: "10px 14px",
-                          borderRadius: 8,
-                          border: "1px solid #ddd",
-                          cursor: chatStatus ? "not-allowed" : "pointer",
-                          fontWeight: 700,
-                          opacity: chatStatus ? 0.6 : 1,
+                          border: active ? "2px solid rgba(37,99,235,0.55)" : "1px solid #e5e7eb",
+                          borderRadius: 16,
+                          padding: 12,
+                          background: "#fff",
+                          boxShadow: active ? "0 14px 28px rgba(37,99,235,0.12)" : "none",
                         }}
                       >
-                        Enviar
-                      </button>
-                    </div>
+                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontWeight: 900 }}>{item.title || "Sin título"}</div>
+                            <div style={{ marginTop: 6, ...UI.small }}>
+                              <b>{item.subject_name}</b> • {item.topic_name} • {humanLabelModule(item.module)} • {humanLabelLevel(item.level)}
+                            </div>
+                            <div style={{ marginTop: 4, ...UI.small }}>
+                              {item.created_at ? `Creado: ${item.created_at}` : ""} {item.session_id ? ` • session: ${item.session_id}` : ""}
+                            </div>
+                          </div>
 
-                    {chatStatus && <div style={{ marginTop: 8, fontSize: 12, opacity: 0.7 }}>{chatStatus}</div>}
-                  </div>
+                          <div style={{ display: "flex", gap: 8 }}>
+                            <button onClick={() => openSaved(item)} style={UI.btn("ghost", false)}>Abrir</button>
+                            <button onClick={() => deleteSaved(item.saved_key)} style={UI.btn("danger", false)}>Eliminar</button>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
-          </>
-        )}
-      </section>
-
-      {/* 4) Mis clases */}
-      <section style={{ border: "1px solid #e6e6e6", borderRadius: 12, padding: 14 }}>
-        <h2 style={{ margin: 0, fontSize: 16 }}>4) Mis clases</h2>
-
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10, marginTop: 12 }}>
-          <input
-            placeholder="Buscar por título/tema/materia…"
-            value={searchSaved}
-            onChange={(e) => setSearchSaved(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-          />
-
-          <select
-            value={filterSavedSubject}
-            onChange={(e) => setFilterSavedSubject(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-          >
-            <option value="all">Todas las materias</option>
-            {subjects.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.name}
-              </option>
-            ))}
-          </select>
-
-          <select
-            value={filterSavedModule}
-            onChange={(e) => setFilterSavedModule(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-          >
-            <option value="all">Todos los módulos</option>
-            <option value="lesson">Clase</option>
-            <option value="exam">Examen</option>
-            <option value="enarm">Caso ENARM</option>
-            <option value="gpc_summary">Resumen GPC</option>
-          </select>
-
-          <select
-            value={filterSavedLevel}
-            onChange={(e) => setFilterSavedLevel(e.target.value)}
-            style={{ padding: 10, borderRadius: 8, border: "1px solid #ddd" }}
-          >
-            <option value="all">Todas las profundidades</option>
-            <option value="auto">Automática</option>
-            <option value="pregrado">Pregrado</option>
-            <option value="internado">Clínica</option>
-          </select>
+          </div>
         </div>
 
-        <div style={{ marginTop: 12, opacity: 0.7, fontSize: 12 }}>
-          Guardadas: <b>{filteredSaved.length}</b> (total: {(Array.isArray(savedLessons) ? savedLessons : []).length})
+        <div style={{ marginTop: 14, ...UI.small }}>
+          E-Vantis — UI para alumnos (en vivo). Siguiente: pulir copy, quitar tecnicismos (IDs/token) y agregar onboarding.
         </div>
-
-        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr", gap: 10 }}>
-          {filteredSaved.length === 0 ? (
-            <div style={{ opacity: 0.7 }}>No hay clases guardadas con esos filtros.</div>
-          ) : (
-            filteredSaved.map((item) => {
-              const active = item.saved_key && item.saved_key === activeSavedKey;
-
-              return (
-                <div
-                  key={item.saved_key || item.session_id}
-                  style={{
-                    border: active ? "2px solid #444" : "1px solid #ddd",
-                    borderRadius: 12,
-                    padding: 12,
-                    display: "flex",
-                    justifyContent: "space-between",
-                    gap: 12,
-                    alignItems: "flex-start",
-                  }}
-                >
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 700 }}>{item.title || "Sin título"}</div>
-
-                    <div style={{ fontSize: 12, opacity: 0.8, marginTop: 4 }}>
-                      <b>Materia:</b> {item.subject_name} • <b>Tema:</b> {item.topic_name} •{" "}
-                      <b>Módulo:</b> {humanLabelModule(item.module)} • <b>Profundidad:</b> {humanLabelLevel(item.level)} •{" "}
-                      <b>Duración:</b> {item.duration_minutes} min
-                    </div>
-
-                    <div style={{ fontSize: 11, opacity: 0.65, marginTop: 4 }}>
-                      {item.created_at ? `Creado: ${item.created_at}` : ""} {item.session_id ? ` • session: ${item.session_id}` : ""}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: 8, minWidth: 160 }}>
-                    <button
-                      onClick={() => openSaved(item)}
-                      style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer", fontWeight: 700 }}
-                    >
-                      Abrir
-                    </button>
-
-                    <button
-                      onClick={() => deleteSaved(item.saved_key)}
-                      style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer" }}
-                    >
-                      Eliminar
-                    </button>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </div>
-      </section>
-
-      <footer style={{ marginTop: 18, opacity: 0.6, fontSize: 12 }}>
-        E-Vantis — UI operativa local.
-      </footer>
+      </div>
     </div>
   );
 }
+
