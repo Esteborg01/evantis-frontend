@@ -34,7 +34,6 @@ function safeJsonParse(s, fallback) {
 
 function loadChatStore() {
   const parsed = safeJsonParse(localStorage.getItem(LS_CHAT), {});
-  // Garantiza objeto plano
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
   return parsed;
 }
@@ -91,7 +90,6 @@ function isProOrPremium(plan) {
 
 /* =========================
    CURRICULUM NORMALIZER (PURO)
-   OJO: NO debe tocar hooks, token, notice, etc.
 ========================= */
 function normalizeCurriculumTree(raw) {
   const subjectsRaw = Array.isArray(raw?.subjects) ? raw.subjects : [];
@@ -119,44 +117,30 @@ function parseMarkdownToBlocks(md = "") {
 }
 
 /* =========================
-   UI TOKENS (estético / consistente)
+   BANNER (alerts)
 ========================= */
-const UI = {
-  shell: {
-    minHeight: "100vh",
-    padding: 18,
-    background: "linear-gradient(180deg, #fafafa, #f4f4f4)",
-    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-  },
-  container: {
-    maxWidth: 1150,
-    margin: "0 auto",
-    display: "grid",
-    gridTemplateColumns: "380px 1fr",
-    gap: 14,
-    alignItems: "start",
-  },
-  card: {
-    background: "#fff",
-    border: "1px solid #eaeaea",
-    borderRadius: 16,
-    padding: 14,
-    boxShadow: "0 10px 30px rgba(0,0,0,0.06)",
-  },
-  h1: { fontSize: 22, fontWeight: 900, margin: 0 },
-  h2: { fontSize: 15, fontWeight: 900, margin: 0 },
-  muted: { fontSize: 12, opacity: 0.75 },
-  row: { display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" },
-  input: { width: "100%", padding: 10, borderRadius: 12, border: "1px solid #ddd", outline: "none" },
-  select: { width: "100%", padding: 10, borderRadius: 12, border: "1px solid #ddd", outline: "none" },
-  btn: { padding: "10px 12px", borderRadius: 12, border: "1px solid #111", cursor: "pointer", fontWeight: 900, background: "#111", color: "#fff" },
-  btnGhost: { padding: "10px 12px", borderRadius: 12, border: "1px solid #ddd", cursor: "pointer", fontWeight: 900, background: "#fff" },
-  badge: { padding: "4px 8px", borderRadius: 999, border: "1px solid #e5e5e5", fontSize: 12, background: "#fff" },
-};
+function Banner({ authStatus, notice, error }) {
+  if (!notice && !error && !authStatus) return null;
 
-function twoColOrOne() {
-  // responsive sin CSS: si es pantalla chica, 1 columna
-  return window.innerWidth < 980 ? "1fr" : "380px 1fr";
+  return (
+    <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
+      {authStatus && (
+        <div className="ev-alert">
+          <span className="k">Estado:</span> {authStatus}
+        </div>
+      )}
+      {notice && (
+        <div className="ev-alert ok">
+          <span className="k">OK:</span> {notice}
+        </div>
+      )}
+      {error && (
+        <div className="ev-alert err">
+          <span className="k">Error:</span> {error}
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function App() {
@@ -170,7 +154,6 @@ export default function App() {
   const [authStatus, setAuthStatus] = useState("");
   const [usage, setUsage] = useState(null);
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
-
 
   // =========================
   // UI
@@ -203,9 +186,7 @@ export default function App() {
     try {
       if (result) localStorage.setItem(LS_ACTIVE_RESULT, JSON.stringify(result));
       else localStorage.removeItem(LS_ACTIVE_RESULT);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [result]);
 
   // =========================
@@ -217,7 +198,6 @@ export default function App() {
   const [chatStatus, setChatStatus] = useState("");
   const chatBoxRef = useRef(null);
 
-  // Rehidratar chat al cambiar de clase
   useEffect(() => {
     const sid = result?.session_id;
     if (!sid) {
@@ -227,14 +207,12 @@ export default function App() {
     setChatMessages(getChatForSession(sid));
   }, [result?.session_id]);
 
-  // Persistir chat cuando cambia
   useEffect(() => {
     const sid = result?.session_id;
     if (!sid) return;
     setChatForSession(sid, chatMessages);
   }, [chatMessages, result?.session_id]);
 
-  // Auto-scroll del chat (FASE 3)
   useEffect(() => {
     if (!chatOpen) return;
     const el = chatBoxRef.current;
@@ -264,9 +242,7 @@ export default function App() {
   useEffect(() => {
     try {
       localStorage.setItem(LS_SAVED, JSON.stringify(Array.isArray(savedLessons) ? savedLessons : []));
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [savedLessons]);
 
   // =========================
@@ -292,9 +268,7 @@ export default function App() {
     [subjects, subjectId]
   );
 
-  const blocks = useMemo(() => {
-    return selectedSubject?.blocks || [];
-  }, [selectedSubject]);
+  const blocks = useMemo(() => selectedSubject?.blocks || [], [selectedSubject]);
 
   const flatTopics = useMemo(() => {
     const list = [];
@@ -315,9 +289,7 @@ export default function App() {
                 .slice(0, 60);
               return { id, name: st };
             }
-            if (st && typeof st === "object") {
-              return { id: st.id, name: st.name };
-            }
+            if (st && typeof st === "object") return { id: st.id, name: st.name };
             return null;
           })
           .filter(Boolean);
@@ -344,7 +316,6 @@ export default function App() {
     return `${topicId}::${subtopicId}`;
   }, [topicId, subtopicId]);
 
-
   const npmProfile = selectedSubject?.npm_profile || "";
 
   // =========================
@@ -353,34 +324,23 @@ export default function App() {
   const plan = normalizePlan(me?.plan);
   const hasPro = isProOrPremium(plan);
 
-  // Módulos permitidos por perfil + plan
   const moduleOptions = useMemo(() => {
     let base;
     if (npmProfile === "basicas") base = ["lesson", "exam"];
     else if (npmProfile === "puente") base = ["lesson", "exam", "enarm"];
     else if (npmProfile === "clinicas") base = ["lesson", "exam", "enarm", "gpc_summary"];
     else base = ["lesson", "exam", "enarm", "gpc_summary"];
-
-    // gating plan: gpc_summary solo pro/premium
     if (!hasPro) base = base.filter((x) => x !== "gpc_summary");
-
     return base;
   }, [npmProfile, hasPro]);
 
-  // Mantener module válido
   useEffect(() => {
     if (!moduleOptions.includes(module)) setModule(moduleOptions[0] || "lesson");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moduleOptions.join("|")]);
 
-  // Reset topic al cambiar materia
-  useEffect(() => {
-    setTopicId("");
-  }, [subjectId]);
-
-  useEffect(() => {
-    setSubtopicId("");
-  }, [topicId]);
+  useEffect(() => setTopicId(""), [subjectId]);
+  useEffect(() => setSubtopicId(""), [topicId]);
 
   // =========================
   // TOKEN PERSIST
@@ -389,9 +349,7 @@ export default function App() {
     try {
       if (token) localStorage.setItem(LS_TOKEN, token);
       else localStorage.removeItem(LS_TOKEN);
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, [token]);
 
   useEffect(() => {
@@ -419,9 +377,7 @@ export default function App() {
         if (!res.ok) return;
         const data = await res.json();
         setMe(data);
-      } catch {
-        // ignore
-      }
+      } catch {}
     })();
   }, [token]);
 
@@ -434,9 +390,7 @@ export default function App() {
       const auth = (qs.get("auth") || "").toLowerCase();
       if (auth === "register") setAuthMode("register");
       if (auth === "login") setAuthMode("login");
-    } catch {
-      // ignore
-    }
+    } catch {}
   }, []);
 
   // =========================
@@ -471,8 +425,7 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail =
-          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -515,8 +468,7 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail =
-          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -526,7 +478,7 @@ export default function App() {
       setToken(tkn);
       setAuthStatus("Cuenta creada. Sesión iniciada.");
       setNotice("Cuenta creada. Sesión iniciada.");
-      setAuthMode("login"); // opcional
+      setAuthMode("login");
     } catch (e) {
       setAuthStatus("");
       setError(e?.message || "Error de registro.");
@@ -539,7 +491,6 @@ export default function App() {
     setAuthStatus("Sesión cerrada.");
     setNotice("Sesión cerrada.");
 
-    // Limpieza de UI sensible
     setResult(null);
     setActiveSavedKey("");
     setChatOpen(false);
@@ -557,22 +508,14 @@ export default function App() {
     if (!token) return "Debes iniciar sesión para generar contenido.";
     if (!subjectId) return "Selecciona una Materia.";
     if (!topicId) return "Selecciona un Tema.";
-    if (selectedTopic?.subtopics?.length > 0 && !subtopicId) {
-      return "Selecciona un Subtema.";
-    }
+    if (selectedTopic?.subtopics?.length > 0 && !subtopicId) return "Selecciona un Subtema.";
     if (!module) return "Selecciona qué quieres generar.";
 
-    // Perfil
     if (npmProfile === "basicas" && (module === "enarm" || module === "gpc_summary")) {
       return "Materia básica: ENARM y Resumen GPC no están disponibles.";
     }
+    if (module === "gpc_summary" && !hasPro) return "Resumen GPC disponible solo en Pro/Premium.";
 
-    // FASE 7: gating plan
-    if (module === "gpc_summary" && !hasPro) {
-      return "Resumen GPC disponible solo en Pro/Premium.";
-    }
-
-    // Reglas UI
     if (module === "enarm" && !enarmContext) return "Para ENARM debes confirmar el modo ENARM (check).";
     if (module === "gpc_summary" && !useGuides) return "Resumen GPC requiere usar guías actualizadas.";
     if (durationMinutes < 5 || durationMinutes > 120) return "Duración inválida (5–120 min recomendado).";
@@ -590,11 +533,8 @@ export default function App() {
       if (!res.ok) return;
       const data = await res.json();
       setUsage(data);
-    } catch (e) {
-      // silencioso para no romper UX
-    }
+    } catch {}
   }
-
 
   async function handleGenerate() {
     setError("");
@@ -632,46 +572,35 @@ export default function App() {
             "Content-Type": "application/json",
             ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
             Authorization: `Bearer ${token}`,
-            // (Opcional) idempotency key si ya lo implementaste en backend y decides usarlo
-            // "Idempotency-Key": crypto.randomUUID(),
           },
           body: JSON.stringify(payload),
         });
 
-        // Intentar parsear JSON; si no, quedarnos con {}
         data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
           const detail = String(data?.detail || res.statusText || "Error");
 
-          // 429 por cuota mensual (bloquea CTA)
           if (res.status === 429 && detail.includes("Límite mensual alcanzado")) {
             setError(detail);
             setQuotaBlocked(true);
             setNotice("");
             return;
           }
-
-          // 429 por rate limit / bursts (no bloquea permanente, solo mensaje)
           if (res.status === 429) {
             setError(detail);
             setNotice("");
             return;
           }
-
-          // Otros errores
           throw new Error(detail);
         }
 
-        // Éxito: si estaba bloqueado, lo desbloqueamos
         setQuotaBlocked(false);
-
       } finally {
         setIsGenerating(false);
       }
 
       const session_id = data?.session_id || `sess_${Math.random().toString(16).slice(2)}`;
-
       const content = data?.lesson || data?.exam || data?.enarm || data?.gpc_summary || "";
 
       const normalized = {
@@ -704,8 +633,7 @@ export default function App() {
   }
 
   function buildSavedKey(meta) {
-    const core = `${meta.subject_id}|${meta.topic_id}|${meta.module}|${meta.level}|${meta.duration_minutes}|${meta.created_at}`;
-    return core;
+    return `${meta.subject_id}|${meta.topic_id}|${meta.module}|${meta.level}|${meta.duration_minutes}|${meta.created_at}`;
   }
 
   function handleSaveCurrent() {
@@ -733,7 +661,6 @@ export default function App() {
     setActiveSavedKey(item.saved_key || "");
     setResult(item);
 
-    // Rehidrata chat: preferir embebido, si no store
     const sid = item?.session_id;
     const embedded = Array.isArray(item?.chat_messages) ? item.chat_messages : null;
     const stored = sid ? getChatForSession(sid) : [];
@@ -749,7 +676,6 @@ export default function App() {
     }, 50);
   }
 
-  // deleteSaved ÚNICO + borra chat asociado
   function deleteSaved(saved_key) {
     if (!saved_key) return;
 
@@ -768,9 +694,7 @@ export default function App() {
         const store = loadChatStore();
         delete store[sid];
         saveChatStore(store);
-      } catch {
-        // ignore
-      }
+      } catch {}
       if (result?.session_id === sid) {
         setChatMessages([]);
         setChatInput("");
@@ -805,12 +729,7 @@ export default function App() {
       if (!tkn) throw new Error("No hay sesión activa. Inicia sesión para usar el chat.");
       if (!API_KEY) throw new Error("Falta VITE_API_KEY. Revisa .env y reinicia npm run dev.");
 
-      const payload = {
-        session_id: sid,
-        mode: "academico",
-        detail_level: "extendido",
-        message: q,
-      };
+      const payload = { session_id: sid, mode: "academico", detail_level: "extendido", message: q };
 
       const res = await fetch(`${API_BASE}/chat`, {
         method: "POST",
@@ -859,14 +778,13 @@ export default function App() {
         if (filterSavedModule !== "all" && x.module !== filterSavedModule) return false;
         if (filterSavedLevel !== "all" && x.level !== filterSavedLevel) return false;
         if (!q) return true;
-
         const hay = `${x.title || ""} ${x.subject_name || ""} ${x.topic_name || ""} ${x.module || ""} ${x.level || ""}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
   }, [savedLessons, searchSaved, filterSavedSubject, filterSavedModule, filterSavedLevel]);
 
-   async function handleDownloadPDFInstitutional() {
+  async function handleDownloadPDFInstitutional() {
     setError("");
     setNotice("");
 
@@ -874,8 +792,6 @@ export default function App() {
       setError("No hay contenido para exportar a PDF.");
       return;
     }
-
-    // FASE 7: gating por plan
     if (!hasPro) {
       setError("Descarga en PDF institucional disponible solo en Pro/Premium.");
       return;
@@ -921,7 +837,6 @@ export default function App() {
         doc.text(`Página ${pageNo} de ${totalPages}`, pageWidth - marginX, footerY, { align: "right" });
       };
 
-      // ===== PORTADA =====
       doc.setFont("helvetica", "bold");
       doc.setFontSize(26);
       doc.text("E-Vantis", marginX, 40);
@@ -963,7 +878,6 @@ export default function App() {
       doc.setFontSize(10);
       doc.text("Generado por E-Vantis. Uso académico.", marginX, pageHeight - 30);
 
-      // ===== CONTENIDO =====
       doc.addPage();
       y = marginTop + headerH;
 
@@ -995,11 +909,9 @@ export default function App() {
       const writeListItem = (text) => {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(11);
-
         const bullet = "•";
         const indentX = 6;
         const maxW = pageWidth - marginX * 2 - indentX;
-
         const lines = doc.splitTextToSize(text, maxW);
         ensureSpace(6);
 
@@ -1038,7 +950,6 @@ export default function App() {
         }
       }
 
-      // ===== CHAT (si existe) =====
       const sid = result?.session_id;
       const chat = sid ? getChatForSession(sid) : [];
       if (Array.isArray(chat) && chat.length > 0) {
@@ -1077,7 +988,6 @@ export default function App() {
         }
       }
 
-      // ===== HEADER/FOOTER EN TODAS LAS PÁGINAS EXCEPTO PORTADA =====
       const totalPages = doc.getNumberOfPages();
       for (let p = 2; p <= totalPages; p++) {
         doc.setPage(p);
@@ -1098,285 +1008,81 @@ export default function App() {
     }
   }
 
-    /* =========================
-     UI KIT (inline, sin CSS extra)
-     - Cards, Buttons, Inputs
-     - Layout responsive
-  ========================= */
-  const UI = {
-    page: {
-      minHeight: "100vh",
-      background: "linear-gradient(180deg, #f8fafc 0%, #ffffff 60%)",
-      color: "#0f172a",
-      fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    },
-    shell: { maxWidth: 1180, margin: "0 auto", padding: 18 },
-    topbar: {
-      display: "flex",
-      justifyContent: "space-between",
-      alignItems: "center",
-      gap: 12,
-      padding: "14px 16px",
-      borderRadius: 16,
-      border: "1px solid #e5e7eb",
-      background: "rgba(255,255,255,0.9)",
-      boxShadow: "0 8px 24px rgba(15, 23, 42, 0.06)",
-      position: "sticky",
-      top: 12,
-      backdropFilter: "blur(8px)",
-      zIndex: 10,
-    },
-    brand: { display: "flex", alignItems: "center", gap: 10 },
-    logo: {
-      width: 36,
-      height: 36,
-      borderRadius: 12,
-      background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 60%, #db2777 120%)",
-      boxShadow: "0 10px 20px rgba(37,99,235,0.18)",
-    },
-    title: { fontSize: 16, fontWeight: 800, letterSpacing: 0.2 },
-    subtitle: { fontSize: 12, opacity: 0.7, marginTop: 2 },
-    pillRow: { display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" },
-    pill: (tone = "neutral") => ({
-      fontSize: 12,
-      padding: "6px 10px",
-      borderRadius: 999,
-      border: "1px solid #e5e7eb",
-      background:
-        tone === "good"
-          ? "rgba(34,197,94,0.10)"
-          : tone === "warn"
-          ? "rgba(234,179,8,0.12)"
-          : tone === "bad"
-          ? "rgba(239,68,68,0.10)"
-          : "rgba(15,23,42,0.03)",
-      color:
-        tone === "good"
-          ? "#166534"
-          : tone === "warn"
-          ? "#854d0e"
-          : tone === "bad"
-          ? "#991b1b"
-          : "#0f172a",
-    }),
-    grid: {
-      display: "grid",
-      gridTemplateColumns: "360px 1fr",
-      gap: 14,
-      marginTop: 14,
-    },
-    gridMobile: {
-      display: "grid",
-      gridTemplateColumns: "1fr",
-      gap: 14,
-      marginTop: 14,
-    },
-    card: {
-      border: "1px solid #e5e7eb",
-      background: "rgba(255,255,255,0.92)",
-      borderRadius: 16,
-      padding: 14,
-      boxShadow: "0 10px 26px rgba(15, 23, 42, 0.06)",
-    },
-    cardTitle: { fontSize: 13, fontWeight: 800, margin: 0 },
-    cardHint: { fontSize: 12, opacity: 0.72, marginTop: 6, lineHeight: 1.35 },
-    sectionTitle: { fontSize: 13, fontWeight: 800, margin: 0 },
-    row: { display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" },
-    field: { display: "grid", gap: 6 },
-    label: { fontSize: 12, opacity: 0.75 },
-    input: {
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: "1px solid #e5e7eb",
-      outline: "none",
-      background: "#fff",
-      fontSize: 13,
-    },
-    select: {
-      padding: "10px 12px",
-      borderRadius: 12,
-      border: "1px solid #e5e7eb",
-      outline: "none",
-      background: "#fff",
-      fontSize: 13,
-    },
-    textarea: {
-      width: "100%",
-      minHeight: 360,
-      padding: 12,
-      borderRadius: 14,
-      border: "1px solid #e5e7eb",
-      fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace",
-      fontSize: 12.5,
-      lineHeight: 1.5,
-      background: "#fff",
-      whiteSpace: "pre-wrap",
-    },
-    btn: (variant = "primary", disabled = false) => {
-      const base = {
-        padding: "10px 12px",
-        borderRadius: 12,
-        border: "1px solid #e5e7eb",
-        cursor: disabled ? "not-allowed" : "pointer",
-        fontWeight: 800,
-        fontSize: 13,
-        transition: "transform .05s ease, box-shadow .15s ease, opacity .15s ease",
-        opacity: disabled ? 0.55 : 1,
-      };
-      if (variant === "primary") {
-        return {
-          ...base,
-          border: "1px solid rgba(37,99,235,0.25)",
-          background: "linear-gradient(135deg, #2563eb 0%, #7c3aed 55%, #db2777 120%)",
-          color: "#fff",
-          boxShadow: "0 12px 26px rgba(37,99,235,0.20)",
-        };
-      }
-      if (variant === "danger") {
-        return {
-          ...base,
-          background: "rgba(239,68,68,0.10)",
-          border: "1px solid rgba(239,68,68,0.30)",
-          color: "#991b1b",
-        };
-      }
-      return {
-        ...base,
-        background: "rgba(15,23,42,0.03)",
-        color: "#0f172a",
-      };
-    },
-    msg: (tone = "neutral") => ({
-      padding: 12,
-      borderRadius: 14,
-      border: "1px solid #e5e7eb",
-      background:
-        tone === "good"
-          ? "rgba(34,197,94,0.10)"
-          : tone === "bad"
-          ? "rgba(239,68,68,0.08)"
-          : tone === "warn"
-          ? "rgba(234,179,8,0.12)"
-          : "rgba(15,23,42,0.03)",
-      color:
-        tone === "good"
-          ? "#166534"
-          : tone === "bad"
-          ? "#991b1b"
-          : tone === "warn"
-          ? "#854d0e"
-          : "#0f172a",
-      fontSize: 13,
-      lineHeight: 1.35,
-    }),
-    divider: { height: 1, background: "#e5e7eb", margin: "10px 0" },
-    small: { fontSize: 12, opacity: 0.75 },
-  };
-
-  const isNarrow = typeof window !== "undefined" ? window.innerWidth < 980 : false;
-
-  function Banner() {
-    if (!notice && !error && !authStatus) return null;
-    return (
-      <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-        {authStatus && <div style={UI.msg("neutral")}><b>Estado:</b> {authStatus}</div>}
-        {notice && <div style={UI.msg("good")}><b>OK:</b> {notice}</div>}
-        {error && <div style={UI.msg("bad")}><b>Error:</b> {error}</div>}
-      </div>
-    );
-  }
-
   /* =========================
      AUTH SCREEN
   ========================= */
   if (!token) {
     return (
-      <div style={UI.page}>
-        <div style={UI.shell}>
-          <div style={UI.topbar}>
-            <div style={UI.brand}>
-              <div style={UI.logo} />
-              <div>
-                <div style={UI.title}>E-Vantis</div>
-                <div style={UI.subtitle}>Acceso • Registro • Plan Free</div>
-              </div>
-            </div>
-            <div style={UI.pillRow}>
-              <span style={UI.pill("neutral")}>Curriculum embebido</span>
-              <span style={UI.pill("neutral")}>API: {API_BASE}</span>
+      <div className="ev-wrap">
+        <div className="ev-topbar">
+          <div className="ev-brand">
+            <div className="ev-logo" />
+            <div>
+              <div className="ev-title">E-Vantis</div>
+              <div className="ev-sub">Acceso • Registro • Plan Free</div>
             </div>
           </div>
 
-          <Banner />
+          <div className="ev-row">
+            <span className="ev-pill">API: <b>{API_BASE}</b></span>
+            <span className="ev-pill">Curriculum: <b>embebido</b></span>
+          </div>
+        </div>
 
-          <div style={{ ...UI.card, marginTop: 14, padding: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <h2 style={{ margin: 0, fontSize: 18, fontWeight: 900 }}>Entrar a E-Vantis</h2>
-                <div style={{ marginTop: 6, ...UI.small }}>
-                  {authMode === "register"
-                    ? "Crea tu cuenta y comienza en plan Free."
-                    : "Inicia sesión para generar clases y guardar tu progreso."}
+        <Banner authStatus={authStatus} notice={notice} error={error} />
+
+        <div className="ev-card" style={{ marginTop: 14 }}>
+          <div className="ev-card-h">
+            <div>
+              <div className="ev-card-t">Entrar a E-Vantis</div>
+              <div className="ev-card-d">
+                {authMode === "register"
+                  ? "Crea tu cuenta y comienza en plan Free."
+                  : "Inicia sesión para generar clases y guardar tu progreso."}
+              </div>
+            </div>
+            <div className="ev-row">
+              <button className="ev-btn" type="button" onClick={() => setAuthMode("login")}>
+                Login
+              </button>
+              <button className="ev-btn ev-btn-primary" type="button" onClick={() => setAuthMode("register")}>
+                Crear cuenta
+              </button>
+            </div>
+          </div>
+
+          <div className="ev-card-b">
+            <div className="ev-row" style={{ gap: 12 }}>
+              <div style={{ flex: 1 }}>
+                <div className="ev-field">
+                  <label className="ev-label">Email</label>
+                  <input className="ev-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" />
                 </div>
               </div>
-              <div style={UI.pillRow}>
-                <button
-                  type="button"
-                  onClick={() => setAuthMode("login")}
-                  style={UI.btn(authMode === "login" ? "primary" : "ghost", false)}
-                >
-                  Login
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setAuthMode("register")}
-                  style={UI.btn(authMode === "register" ? "primary" : "ghost", false)}
-                >
-                  Crear cuenta
-                </button>
+              <div style={{ flex: 1 }}>
+                <div className="ev-field">
+                  <label className="ev-label">Password</label>
+                  <input className="ev-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+                </div>
               </div>
             </div>
 
-            <div style={UI.divider} />
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 10 }}>
-              <div style={UI.field}>
-                <div style={UI.label}>Email</div>
-                <input
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="tu@email.com"
-                  style={UI.input}
-                />
-              </div>
-              <div style={UI.field}>
-                <div style={UI.label}>Password</div>
-                <input
-                  type="password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="••••••••"
-                  style={UI.input}
-                />
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12, display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            <div className="ev-row" style={{ marginTop: 10 }}>
               <button
+                className="ev-btn ev-btn-primary"
                 onClick={authMode === "register" ? handleRegister : handleLogin}
-                style={UI.btn("primary", false)}
               >
                 {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
               </button>
-              <div style={UI.small}>
+              <div className="ev-muted" style={{ fontSize: 12 }}>
                 Al continuar aceptas uso académico. No sustituye juicio clínico.
               </div>
             </div>
           </div>
+        </div>
 
-          <div style={{ marginTop: 14, ...UI.small }}>
-            E-Vantis — Plataforma académica. Si tienes problemas, prueba recargar y volver a iniciar sesión.
-          </div>
+        <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
+          E-Vantis — Plataforma académica. Si tienes problemas, recarga y vuelve a iniciar sesión.
         </div>
       </div>
     );
@@ -1386,352 +1092,282 @@ export default function App() {
      APP SHELL (logueado)
   ========================= */
   return (
-    <div style={UI.page}>
-      <div style={UI.shell}>
-        {/* TOPBAR */}
-        <div style={UI.topbar}>
-          <div style={UI.brand}>
-            <div style={UI.logo} />
-            <div>
-              <div style={UI.title}>E-Vantis</div>
-              <div style={UI.subtitle}>Clases • Exámenes • Casos ENARM • Guardadas • Chat</div>
-            </div>
-          </div>
-
-          <div style={UI.pillRow}>
-            <span style={UI.pill("neutral")}>
-              Plan: <b>{me?.plan || "—"}</b>
-            </span>
-            {hasPro ? (
-              <span style={UI.pill("good")}>Pro/Premium</span>
-            ) : (
-              <span style={UI.pill("warn")}>Free</span>
-            )}
-            <button onClick={handleLogout} style={UI.btn("ghost", false)}>
-              Logout
-            </button>
+    <div className="ev-wrap">
+      <div className="ev-topbar">
+        <div className="ev-brand">
+          <div className="ev-logo" />
+          <div>
+            <div className="ev-title">E-Vantis</div>
+            <div className="ev-sub">Clases • Exámenes • Casos ENARM • Guardadas • Chat</div>
           </div>
         </div>
 
-        {/* USAGE */}
-        {usage?.modules && (
-          <div style={{ ...UI.card, marginTop: 14 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-              <div>
-                <h3 style={UI.sectionTitle}>Uso mensual ({usage.yyyymm})</h3>
-                <div style={{ marginTop: 6, ...UI.small }}>
-                  lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/
-                  {usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc{" "}
-                  {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
-                </div>
+        <div className="ev-row">
+          <span className="ev-pill">
+            Plan: <b>{me?.plan || "—"}</b>
+          </span>
+          {hasPro ? <span className="ev-badge ev-badge-accent">Pro/Premium</span> : <span className="ev-badge">Free</span>}
+          <button className="ev-btn" onClick={handleLogout}>Logout</button>
+        </div>
+      </div>
+
+      {usage?.modules && (
+        <div className="ev-card" style={{ marginTop: 14 }}>
+          <div className="ev-card-h">
+            <div>
+              <div className="ev-card-t">Uso mensual ({usage.yyyymm})</div>
+              <div className="ev-card-d">
+                lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
               </div>
-              <div style={UI.pillRow}>
-                <span style={UI.pill("neutral")}>API: {API_BASE}</span>
-                <span style={UI.pill("neutral")}>Curriculum: embebido</span>
-              </div>
+            </div>
+            <div className="ev-row">
+              <span className="ev-pill">API: <b>{API_BASE}</b></span>
+              <span className="ev-pill">Curriculum: <b>embebido</b></span>
             </div>
           </div>
-        )}
+        </div>
+      )}
 
-        <Banner />
+      <Banner authStatus={authStatus} notice={notice} error={error} />
 
-        {/* LAYOUT */}
-        <div style={isNarrow ? UI.gridMobile : UI.grid}>
-          {/* LEFT: Builder */}
-          <div style={UI.card}>
-            <h3 style={UI.sectionTitle}>Crear contenido</h3>
-            <div style={{ marginTop: 6, ...UI.cardHint }}>
-              Selecciona <b>Materia → Tema → Subtema</b> y después el <b>Módulo</b>. El alumno no necesita ver IDs.
+      <div className="ev-grid">
+        {/* LEFT */}
+        <div className="ev-card">
+          <div className="ev-card-h">
+            <div>
+              <div className="ev-card-t">Crear contenido</div>
+              <div className="ev-card-d">Selecciona Materia → Tema → Subtema y el Módulo.</div>
+            </div>
+            <span className="ev-badge">{selectedSubject?.npm_profile ? `Perfil: ${selectedSubject.npm_profile}` : "Perfil: —"}</span>
+          </div>
+
+          <div className="ev-card-b">
+            <div className="ev-field">
+              <label className="ev-label">Materia</label>
+              <select className="ev-select" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
+                <option value="">— Selecciona —</option>
+                {subjects.map((s) => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
             </div>
 
-            <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
-              {/* Materia */}
-              <div style={UI.field}>
-                <div style={UI.label}>Materia</div>
-                <select
-                  value={subjectId}
-                  onChange={(e) => setSubjectId(e.target.value)}
-                  style={UI.select}
-                >
-                  <option value="">— Selecciona —</option>
-                  {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
-                  ))}
-                </select>
-                {selectedSubject && (
-                  <div style={UI.small}>
-                    Perfil: <b>{selectedSubject.npm_profile}</b>
-                  </div>
-                )}
-              </div>
+            <div className="ev-field">
+              <label className="ev-label">Tema</label>
+              <select
+                className="ev-select"
+                value={topicId}
+                onChange={(e) => setTopicId(e.target.value)}
+                disabled={!subjectId}
+              >
+                <option value="">— Selecciona —</option>
+                {blocks.map((b) => (
+                  <React.Fragment key={b.id}>
+                    <option value="" disabled>— {b.name} —</option>
+                    {(b.macro_topics || []).map((t) => (
+                      <option key={t.id} value={t.id}>{t.name}</option>
+                    ))}
+                  </React.Fragment>
+                ))}
+              </select>
+            </div>
 
-              {/* Tema */}
-              <div style={UI.field}>
-                <div style={UI.label}>Tema</div>
-                <select
-                  value={topicId}
-                  onChange={(e) => setTopicId(e.target.value)}
-                  disabled={!subjectId}
-                  style={{ ...UI.select, opacity: subjectId ? 1 : 0.6 }}
-                >
-                  <option value="">— Selecciona —</option>
-                  {blocks.map((b) => (
-                    <React.Fragment key={b.id}>
-                      <option value="" disabled>
-                        — {b.name} —
-                      </option>
-                      {(b.macro_topics || []).map((t) => (
-                        <option key={t.id} value={t.id}>
-                          {t.name}
-                        </option>
-                      ))}
-                    </React.Fragment>
-                  ))}
-                </select>
-              </div>
+            <div className="ev-field">
+              <label className="ev-label">Subtema</label>
+              <select
+                className="ev-select"
+                value={subtopicId}
+                onChange={(e) => setSubtopicId(e.target.value)}
+                disabled={!selectedTopic || !(selectedTopic.subtopics?.length > 0)}
+              >
+                <option value="">
+                  {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
+                </option>
+                {(selectedTopic?.subtopics || []).map((st) => (
+                  <option key={st.id} value={st.id}>{st.name}</option>
+                ))}
+              </select>
+            </div>
 
-              {/* Subtema */}
-              <div style={UI.field}>
-                <div style={UI.label}>Subtema</div>
-                <select
-                  value={subtopicId}
-                  onChange={(e) => setSubtopicId(e.target.value)}
-                  disabled={!selectedTopic || !(selectedTopic.subtopics?.length > 0)}
-                  style={{
-                    ...UI.select,
-                    opacity: selectedTopic && selectedTopic.subtopics?.length > 0 ? 1 : 0.6,
-                  }}
-                >
-                  <option value="">
-                    {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
-                  </option>
-                  {(selectedTopic?.subtopics || []).map((st) => (
-                    <option key={st.id} value={st.id}>
-                      {st.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
+            <div className="ev-field">
+              <label className="ev-label">Qué quieres generar</label>
+              <select className="ev-select" value={module} onChange={(e) => setModule(e.target.value)}>
+                {moduleOptions.map((m) => (
+                  <option key={m} value={m}>{humanLabelModule(m)}</option>
+                ))}
+              </select>
+              {!hasPro && moduleOptions.includes("gpc_summary") === false && (
+                <div className="ev-muted" style={{ fontSize: 12 }}>Resumen GPC requiere Pro/Premium.</div>
+              )}
+            </div>
 
-              {/* Módulo */}
-              <div style={UI.field}>
-                <div style={UI.label}>Qué quieres generar</div>
-                <select value={module} onChange={(e) => setModule(e.target.value)} style={UI.select}>
-                  {moduleOptions.map((m) => (
-                    <option key={m} value={m}>
-                      {humanLabelModule(m)}
-                    </option>
-                  ))}
-                </select>
-                {!hasPro && moduleOptions.includes("gpc_summary") === false && (
-                  <div style={UI.small}>Resumen GPC requiere Pro/Premium.</div>
-                )}
-              </div>
+            <div className="ev-field">
+              <label className="ev-label">Profundidad</label>
+              <select className="ev-select" value={level} onChange={(e) => setLevel(e.target.value)}>
+                <option value="auto">Automática</option>
+                <option value="pregrado">Pregrado</option>
+                <option value="internado">Clínica</option>
+              </select>
+            </div>
 
-              {/* Profundidad */}
-              <div style={UI.field}>
-                <div style={UI.label}>Profundidad</div>
-                <select value={level} onChange={(e) => setLevel(e.target.value)} style={UI.select}>
-                  <option value="auto">Automática</option>
-                  <option value="pregrado">Pregrado</option>
-                  <option value="internado">Clínica</option>
-                </select>
-              </div>
-
-              <div style={UI.divider} />
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
-                <div style={UI.field}>
-                  <div style={UI.label}>Duración (min)</div>
-                  <input
-                    type="number"
-                    value={durationMinutes}
-                    onChange={(e) => setDurationMinutes(e.target.value)}
-                    min={5}
-                    max={120}
-                    style={UI.input}
-                  />
+            <div className="ev-row">
+              <div style={{ flex: 1 }}>
+                <div className="ev-field">
+                  <label className="ev-label">Duración (min)</label>
+                  <input className="ev-input" type="number" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} min={5} max={120} />
                 </div>
+              </div>
 
-                <div style={UI.field}>
-                  <div style={UI.label}>Estilo (solo clases)</div>
-                  <select
-                    value={style}
-                    onChange={(e) => setStyle(e.target.value)}
-                    disabled={module !== "lesson"}
-                    style={{ ...UI.select, opacity: module === "lesson" ? 1 : 0.6 }}
-                  >
+              <div style={{ flex: 1 }}>
+                <div className="ev-field">
+                  <label className="ev-label">Estilo (solo clases)</label>
+                  <select className="ev-select" value={style} onChange={(e) => setStyle(e.target.value)} disabled={module !== "lesson"}>
                     <option value="magistral">Magistral</option>
                     <option value="high_yield">High-yield</option>
                     <option value="socratico">Socrático</option>
                   </select>
                 </div>
+              </div>
+            </div>
 
-                <div style={UI.field}>
-                  <div style={UI.label}>Número de preguntas</div>
+            <div className="ev-row">
+              <div style={{ flex: 1 }}>
+                <div className="ev-field">
+                  <label className="ev-label">Número de preguntas</label>
                   <input
+                    className="ev-input"
                     type="number"
                     value={numQuestions}
                     onChange={(e) => setNumQuestions(e.target.value)}
                     min={5}
                     max={200}
                     disabled={!(module === "exam" || module === "enarm")}
-                    style={{ ...UI.input, opacity: module === "exam" || module === "enarm" ? 1 : 0.6 }}
                   />
                 </div>
-
-                <div style={{ ...UI.field, alignContent: "end" }}>
-                  <button
-                    onClick={() => setAdvancedOpen((v) => !v)}
-                    style={UI.btn("ghost", false)}
-                  >
-                    {advancedOpen ? "Ocultar" : "Mostrar"} opciones avanzadas
-                  </button>
-                </div>
               </div>
 
-              {advancedOpen && (
-                <div style={{ ...UI.msg("neutral"), marginTop: 6 }}>
-                  <label style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 8 }}>
-                    <input
-                      type="checkbox"
-                      checked={useGuides}
-                      onChange={(e) => setUseGuides(e.target.checked)}
-                      disabled={module === "gpc_summary"}
-                    />
-                    <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
-                  </label>
-
-                  <label style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                    <input type="checkbox" checked={enarmContext} onChange={(e) => setEnarmContext(e.target.checked)} />
-                    <span style={{ fontSize: 13 }}>Confirmo modo ENARM</span>
-                  </label>
-                </div>
-              )}
-
-              <button
-                onClick={handleGenerate}
-                disabled={isGenerating || quotaBlocked}
-                style={UI.btn("primary", isGenerating || quotaBlocked)}
-              >
-                {quotaBlocked ? "Cuota mensual alcanzada" : isGenerating ? "Generando…" : "Generar"}
-              </button>
-
-              <div style={UI.small}>
-                Se enviará: <b>{selectedSubject?.name || "Materia"}</b> → <b>{selectedTopic?.name || "Tema"}</b> →{" "}
-                <b>{humanLabelModule(module)}</b>
+              <div style={{ alignSelf: "end" }}>
+                <button className="ev-btn" onClick={() => setAdvancedOpen((v) => !v)}>
+                  {advancedOpen ? "Ocultar" : "Mostrar"} avanzadas
+                </button>
               </div>
             </div>
+
+            {advancedOpen && (
+              <div className="ev-alert" style={{ marginTop: 8 }}>
+                <label className="ev-row" style={{ gap: 10, marginBottom: 8 }}>
+                  <input type="checkbox" checked={useGuides} onChange={(e) => setUseGuides(e.target.checked)} disabled={module === "gpc_summary"} />
+                  <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
+                </label>
+
+                <label className="ev-row" style={{ gap: 10 }}>
+                  <input type="checkbox" checked={enarmContext} onChange={(e) => setEnarmContext(e.target.checked)} />
+                  <span style={{ fontSize: 13 }}>Confirmo modo ENARM</span>
+                </label>
+              </div>
+            )}
+
+            <button
+              className={`ev-btn ev-btn-primary`}
+              onClick={handleGenerate}
+              disabled={isGenerating || quotaBlocked}
+              style={{ width: "100%", marginTop: 10 }}
+            >
+              {quotaBlocked ? "Cuota mensual alcanzada" : isGenerating ? "Generando…" : "Generar"}
+            </button>
+
+            <div className="ev-muted" style={{ fontSize: 12, marginTop: 10 }}>
+              Se enviará: <b>{selectedSubject?.name || "Materia"}</b> → <b>{selectedTopic?.name || "Tema"}</b> →{" "}
+              <b>{humanLabelModule(module)}</b>
+            </div>
           </div>
+        </div>
 
-          {/* RIGHT: Result + Chat + Saved */}
-          <div style={{ display: "grid", gap: 14 }}>
-            {/* RESULT */}
-            <div ref={resultRef} style={UI.card}>
-              <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                <div>
-                  <h3 style={UI.sectionTitle}>Resultado</h3>
-                  <div style={{ marginTop: 6, ...UI.small }}>
-                    {result?.session_id ? (
-                      <>
-                        Session:{" "}
-                        <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, monospace" }}>
-                          {result.session_id}
-                        </span>
-                      </>
-                    ) : (
-                      "Aún no hay contenido generado."
-                    )}
-                  </div>
-                </div>
-
-                <div style={UI.pillRow}>
-                  <button
-                    onClick={handleSaveCurrent}
-                    disabled={!result}
-                    style={UI.btn("ghost", !result)}
-                  >
-                    Guardar
-                  </button>
-
-                  <button
-                    onClick={handleDownloadPDFInstitutional}
-                    disabled={!hasPro || !result}
-                    style={UI.btn("ghost", !hasPro || !result)}
-                  >
-                    PDF (Pro/Premium)
-                  </button>
+        {/* RIGHT */}
+        <div style={{ display: "grid", gap: 14 }}>
+          <div ref={resultRef} className="ev-card">
+            <div className="ev-card-h">
+              <div>
+                <div className="ev-card-t">Resultado</div>
+                <div className="ev-card-d">
+                  {result?.session_id ? (
+                    <>
+                      Session: <span className="ev-code">{result.session_id}</span>
+                    </>
+                  ) : (
+                    "Aún no hay contenido generado."
+                  )}
                 </div>
               </div>
 
+              <div className="ev-row">
+                <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>
+                  Guardar
+                </button>
+
+                <button className="ev-btn ev-btn-cta" onClick={handleDownloadPDFInstitutional} disabled={!hasPro || !result}>
+                  PDF (Pro/Premium)
+                </button>
+              </div>
+            </div>
+
+            <div className="ev-card-b">
               {result ? (
                 <>
-                  <div style={UI.divider} />
                   <div style={{ fontSize: 16, fontWeight: 900 }}>{result.title}</div>
-                  <div style={{ marginTop: 6, ...UI.small }}>
+                  <div className="ev-muted" style={{ fontSize: 12, marginTop: 6 }}>
                     <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} • <b>Módulo:</b>{" "}
                     {humanLabelModule(result.module)} • <b>Profundidad:</b> {humanLabelLevel(result.level)} •{" "}
                     <b>Duración:</b> {result.duration_minutes} min
                   </div>
 
                   <div style={{ marginTop: 12 }}>
-                    <textarea readOnly value={result.lesson || ""} style={UI.textarea} />
+                    <textarea readOnly value={result.lesson || ""} className="ev-textarea" />
                   </div>
 
                   {/* CHAT */}
-                  <div style={{ ...UI.card, marginTop: 12, padding: 12 }}>
-                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+                  <div className="ev-card" style={{ marginTop: 12 }}>
+                    <div className="ev-card-h">
                       <div>
-                        <div style={{ fontWeight: 900 }}>Chat académico</div>
-                        <div style={UI.small}>Preguntas sobre esta clase (se guarda por sesión).</div>
+                        <div className="ev-card-t">Chat académico</div>
+                        <div className="ev-card-d">Preguntas sobre esta clase (se guarda por sesión).</div>
                       </div>
-                      <button
-                        onClick={() => setChatOpen((v) => !v)}
-                        style={UI.btn("ghost", false)}
-                      >
+                      <button className="ev-btn" onClick={() => setChatOpen((v) => !v)}>
                         {chatOpen ? "Ocultar" : "Abrir"} chat
                       </button>
                     </div>
 
                     {chatOpen && (
-                      <div style={{ marginTop: 10 }}>
+                      <div className="ev-card-b">
                         <div
                           ref={chatBoxRef}
-                          style={{
-                            border: "1px solid #e5e7eb",
-                            borderRadius: 14,
-                            padding: 12,
-                            minHeight: 160,
-                            maxHeight: 280,
-                            overflow: "auto",
-                            background: "#fff",
-                          }}
+                          className="ev-card"
+                          style={{ padding: 12, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.10)" }}
                         >
                           {chatMessages.length === 0 ? (
-                            <div style={UI.small}>No hay mensajes aún. Escribe tu primera duda.</div>
+                            <div className="ev-muted" style={{ fontSize: 12 }}>
+                              No hay mensajes aún. Escribe tu primera duda.
+                            </div>
                           ) : (
                             chatMessages.map((m, idx) => (
                               <div key={`${m.created_at || "t"}_${idx}`} style={{ marginBottom: 12 }}>
-                                <div style={{ fontSize: 12, opacity: 0.7 }}>
+                                <div className="ev-muted" style={{ fontSize: 12 }}>
                                   <b>{m.role === "user" ? "Tú" : "E-Vantis"}</b> · {m.created_at}
                                 </div>
-                                <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>
-                                  {m.content}
-                                </div>
+                                <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>{m.content}</div>
                               </div>
                             ))
                           )}
                         </div>
 
-                        <div style={{ display: "flex", gap: 10, marginTop: 10, alignItems: "stretch" }}>
+                        <div className="ev-row" style={{ marginTop: 10, alignItems: "stretch" }}>
                           <textarea
+                            className="ev-textarea"
                             value={chatInput}
                             onChange={(e) => setChatInput(e.target.value)}
                             placeholder="Escribe tu duda… (Enter envía, Shift+Enter salto)"
                             rows={2}
-                            style={{ ...UI.input, flex: 1, resize: "vertical" }}
+                            style={{ minHeight: 70, flex: 1 }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" && !e.shiftKey) {
                                 e.preventDefault();
@@ -1740,52 +1376,51 @@ export default function App() {
                             }}
                             disabled={!!chatStatus}
                           />
-                          <button
-                            onClick={handleChatSend}
-                            disabled={!!chatStatus}
-                            style={UI.btn("primary", !!chatStatus)}
-                          >
+                          <button className="ev-btn ev-btn-primary" onClick={handleChatSend} disabled={!!chatStatus}>
                             Enviar
                           </button>
                         </div>
 
-                        {chatStatus && <div style={{ marginTop: 8, ...UI.small }}>{chatStatus}</div>}
+                        {chatStatus && (
+                          <div className="ev-muted" style={{ marginTop: 8, fontSize: 12 }}>
+                            {chatStatus}
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
                 </>
               ) : (
-                <div style={{ marginTop: 10, ...UI.small }}>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
                   Genera una clase/examen/caso para ver el contenido aquí.
                 </div>
               )}
             </div>
+          </div>
 
-            {/* SAVED */}
-            <div style={UI.card}>
-              <h3 style={UI.sectionTitle}>Mis clases</h3>
-              <div style={{ marginTop: 6, ...UI.small }}>
-                Guardadas: <b>{filteredSaved.length}</b> (total: {(Array.isArray(savedLessons) ? savedLessons : []).length})
+          {/* SAVED */}
+          <div className="ev-card">
+            <div className="ev-card-h">
+              <div>
+                <div className="ev-card-t">Mis clases</div>
+                <div className="ev-card-d">
+                  Guardadas: <b>{filteredSaved.length}</b> (total: {(Array.isArray(savedLessons) ? savedLessons : []).length})
+                </div>
               </div>
+            </div>
 
-              <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "2fr 1fr 1fr 1fr", gap: 10 }}>
-                <input
-                  placeholder="Buscar…"
-                  value={searchSaved}
-                  onChange={(e) => setSearchSaved(e.target.value)}
-                  style={UI.input}
-                />
+            <div className="ev-card-b">
+              <div className="ev-row" style={{ flexWrap: "wrap" }}>
+                <input className="ev-input" placeholder="Buscar…" value={searchSaved} onChange={(e) => setSearchSaved(e.target.value)} />
 
-                <select value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)} style={UI.select}>
+                <select className="ev-select" value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)}>
                   <option value="all">Materia</option>
                   {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
 
-                <select value={filterSavedModule} onChange={(e) => setFilterSavedModule(e.target.value)} style={UI.select}>
+                <select className="ev-select" value={filterSavedModule} onChange={(e) => setFilterSavedModule(e.target.value)}>
                   <option value="all">Módulo</option>
                   <option value="lesson">Clase</option>
                   <option value="exam">Examen</option>
@@ -1793,7 +1428,7 @@ export default function App() {
                   <option value="gpc_summary">Resumen GPC</option>
                 </select>
 
-                <select value={filterSavedLevel} onChange={(e) => setFilterSavedLevel(e.target.value)} style={UI.select}>
+                <select className="ev-select" value={filterSavedLevel} onChange={(e) => setFilterSavedLevel(e.target.value)}>
                   <option value="all">Nivel</option>
                   <option value="auto">Automática</option>
                   <option value="pregrado">Pregrado</option>
@@ -1803,35 +1438,28 @@ export default function App() {
 
               <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
                 {filteredSaved.length === 0 ? (
-                  <div style={UI.small}>No hay clases guardadas con esos filtros.</div>
+                  <div className="ev-muted" style={{ fontSize: 12 }}>No hay clases guardadas con esos filtros.</div>
                 ) : (
                   filteredSaved.map((item) => {
                     const active = item.saved_key && item.saved_key === activeSavedKey;
                     return (
-                      <div
-                        key={item.saved_key || item.session_id}
-                        style={{
-                          border: active ? "2px solid rgba(37,99,235,0.55)" : "1px solid #e5e7eb",
-                          borderRadius: 16,
-                          padding: 12,
-                          background: "#fff",
-                          boxShadow: active ? "0 14px 28px rgba(37,99,235,0.12)" : "none",
-                        }}
-                      >
-                        <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: 900 }}>{item.title || "Sin título"}</div>
-                            <div style={{ marginTop: 6, ...UI.small }}>
-                              <b>{item.subject_name}</b> • {item.topic_name} • {humanLabelModule(item.module)} • {humanLabelLevel(item.level)}
+                      <div key={item.saved_key || item.session_id} className="ev-card" style={{ border: active ? "1px solid rgba(30,203,225,0.55)" : undefined }}>
+                        <div className="ev-card-b">
+                          <div className="ev-spread">
+                            <div style={{ flex: 1 }}>
+                              <div style={{ fontWeight: 900 }}>{item.title || "Sin título"}</div>
+                              <div className="ev-muted" style={{ fontSize: 12, marginTop: 6 }}>
+                                <b>{item.subject_name}</b> • {item.topic_name} • {humanLabelModule(item.module)} • {humanLabelLevel(item.level)}
+                              </div>
+                              <div className="ev-muted" style={{ fontSize: 12, marginTop: 4 }}>
+                                {item.created_at ? `Creado: ${item.created_at}` : ""} {item.session_id ? ` • session: ${item.session_id}` : ""}
+                              </div>
                             </div>
-                            <div style={{ marginTop: 4, ...UI.small }}>
-                              {item.created_at ? `Creado: ${item.created_at}` : ""} {item.session_id ? ` • session: ${item.session_id}` : ""}
-                            </div>
-                          </div>
 
-                          <div style={{ display: "flex", gap: 8 }}>
-                            <button onClick={() => openSaved(item)} style={UI.btn("ghost", false)}>Abrir</button>
-                            <button onClick={() => deleteSaved(item.saved_key)} style={UI.btn("danger", false)}>Eliminar</button>
+                            <div className="ev-row">
+                              <button className="ev-btn" onClick={() => openSaved(item)}>Abrir</button>
+                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>Eliminar</button>
+                            </div>
                           </div>
                         </div>
                       </div>
@@ -1842,12 +1470,11 @@ export default function App() {
             </div>
           </div>
         </div>
+      </div>
 
-        <div style={{ marginTop: 14, ...UI.small }}>
-          E-Vantis — UI para alumnos (en vivo). Siguiente: pulir copy, quitar tecnicismos (IDs/token) y agregar onboarding.
-        </div>
+      <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
+        E-Vantis — UI para alumnos. Siguiente: pulir copy, ocultar tecnicismos y agregar onboarding.
       </div>
     </div>
   );
 }
-
