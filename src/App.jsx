@@ -9,6 +9,7 @@ const API_BASE = import.meta.env.VITE_API_BASE || "http://127.0.0.1:8000";
 const API_KEY = import.meta.env.VITE_API_KEY || "";
 
 const AUTH_LOGIN_PATH = "/auth/login";
+const AUTH_REGISTER_PATH = "/auth/register";
 const AUTH_ME_PATH = "/auth/me";
 const TEACH_CURRICULUM_PATH = "/teach/curriculum";
 
@@ -127,6 +128,8 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [authStatus, setAuthStatus] = useState("");
   const [usage, setUsage] = useState(null);
+  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+
 
   // =========================
   // UI
@@ -382,6 +385,20 @@ export default function App() {
   }, [token]);
 
   // =========================
+  // AUTH MODE desde querystring (?auth=login|register)
+  // =========================
+  useEffect(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search || "");
+      const auth = (qs.get("auth") || "").toLowerCase();
+      if (auth === "register") setAuthMode("register");
+      if (auth === "login") setAuthMode("login");
+    } catch {
+      // ignore
+    }
+  }, []);
+
+  // =========================
   // ACTIONS
   // =========================
   async function handleLogin() {
@@ -427,6 +444,51 @@ export default function App() {
     } catch (e) {
       setAuthStatus("");
       setError(e?.message || "Error de login.");
+    }
+  }
+
+  async function handleRegister() {
+    setAuthStatus("Creando cuenta…");
+    setError("");
+    setNotice("");
+
+    try {
+      const res = await fetch(`${API_BASE}${AUTH_REGISTER_PATH}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+        },
+        body: JSON.stringify({
+          email: (email || "").trim(),
+          password: password || "",
+        }),
+      });
+
+      const rawText = await res.text();
+      let data;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = { detail: rawText };
+      }
+
+      if (!res.ok) {
+        const detail =
+          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
+      }
+
+      const tkn = data?.access_token || "";
+      if (!tkn) throw new Error("Registro OK, pero no se recibió access_token.");
+
+      setToken(tkn);
+      setAuthStatus("Cuenta creada. Sesión iniciada.");
+      setNotice("Cuenta creada. Sesión iniciada.");
+      setAuthMode("login"); // opcional
+    } catch (e) {
+      setAuthStatus("");
+      setError(e?.message || "Error de registro.");
     }
   }
 
@@ -1054,11 +1116,36 @@ export default function App() {
             />
 
             <button
-              onClick={handleLogin}
+              onClick={authMode === "register" ? handleRegister : handleLogin}
               style={{ padding: "10px 14px", borderRadius: 8, border: "1px solid #ddd", cursor: "pointer", fontWeight: 700 }}
             >
-              Login
+              {authMode === "register" ? "Crear cuenta" : "Login"}
             </button>
+          </div>
+          <div style={{ marginTop: 12, fontSize: 14, opacity: 0.85 }}>
+            {authMode === "login" ? (
+              <span>
+                ¿No tienes cuenta?{" "}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("register")}
+                  style={{ background: "transparent", border: "none", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700 }}
+                >
+                  Crear cuenta
+                </button>
+              </span>
+            ) : (
+              <span>
+                ¿Ya tienes cuenta?{" "}
+                <button
+                  type="button"
+                  onClick={() => setAuthMode("login")}
+                  style={{ background: "transparent", border: "none", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700 }}
+                >
+                  Iniciar sesión
+                </button>
+              </span>
+            )}
           </div>
         </section>
 
