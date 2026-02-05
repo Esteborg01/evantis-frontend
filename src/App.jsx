@@ -138,6 +138,111 @@ function renderAcademicHTML(md = "") {
   return DOMPurify.sanitize(html);
 }
 
+function normalizeSectionTitle(s = "") {
+  return String(s || "")
+    .trim()
+    .replace(/[:：]\s*$/, "")
+    .toLowerCase();
+}
+
+function sectionKind(title = "") {
+  const t = normalizeSectionTitle(title);
+
+  // Clínicas (core)
+  if (t.includes("definicion")) return "core";
+  if (t.includes("epidemiologia")) return "core";
+  if (t.includes("cuadro clinico")) return "core";
+  if (t.includes("signos") || t.includes("sintomas")) return "core";
+  if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
+  if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
+
+  // Cierre
+  if (t.includes("algoritmo")) return "algo";
+  if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
+
+  // Otros
+  return "other";
+}
+
+/**
+ * Toma Markdown, lo pasa a HTML (marked) + sanitize (DOMPurify),
+ * y lo convierte a "secciones" basadas en h2/h3.
+ */
+function buildSectionedHTML(md = "") {
+  const sanitized = renderAcademicHTML(md); // ya es HTML seguro
+  const doc = new DOMParser().parseFromString(sanitized, "text/html");
+  const body = doc.body;
+
+  const sections = [];
+  let current = { title: "Contenido", kind: "other", nodes: [] };
+
+  const flush = () => {
+    const hasContent = current.nodes.some((n) => {
+      const t = (n.textContent || "").trim();
+      return t.length > 0 || n.tagName?.toLowerCase() === "ul" || n.tagName?.toLowerCase() === "ol";
+    });
+    if (hasContent) sections.push(current);
+  };
+
+  Array.from(body.childNodes).forEach((node) => {
+    const el = node.nodeType === 1 ? node : null; // ELEMENT_NODE
+    const tag = el?.tagName?.toLowerCase?.() || "";
+
+    // Usamos h2/h3 como separadores de sección
+    if (tag === "h2" || tag === "h3") {
+      flush();
+      const title = (el.textContent || "").trim() || "Sección";
+      current = { title, kind: sectionKind(title), nodes: [] };
+      return;
+    }
+
+    // Acumulamos el resto
+    if (node.nodeType === 3) {
+      // texto suelto
+      const txt = (node.textContent || "").trim();
+      if (txt) {
+        const p = doc.createElement("p");
+        p.textContent = txt;
+        current.nodes.push(p);
+      }
+      return;
+    }
+
+    if (el) current.nodes.push(el);
+  });
+
+  flush();
+
+  // Render final: wrapper con tarjetas
+  const wrap = doc.createElement("div");
+  wrap.setAttribute("class", "ev-sectioned");
+
+  sections.forEach((s) => {
+    const card = doc.createElement("section");
+    card.setAttribute("class", `ev-section ev-section-${s.kind}`);
+
+    const header = doc.createElement("div");
+    header.setAttribute("class", "ev-section-h");
+
+    const h = doc.createElement("div");
+    h.setAttribute("class", "ev-section-t");
+    h.textContent = s.title;
+
+    header.appendChild(h);
+
+    const content = doc.createElement("div");
+    content.setAttribute("class", "ev-section-b");
+
+    s.nodes.forEach((n) => content.appendChild(n));
+
+    card.appendChild(header);
+    card.appendChild(content);
+    wrap.appendChild(card);
+  });
+
+  return wrap.innerHTML;
+}
+
 /* =========================
    BANNER (alerts)
    (quitamos “OK:” y “Estado: sesión…”, dejamos solo error
@@ -1375,7 +1480,7 @@ export default function App() {
                   <div
                     className="ev-content"
                     style={{ marginTop: 12 }}
-                    dangerouslySetInnerHTML={{ __html: renderAcademicHTML(result.lesson || "") }}
+                    dangerouslySetInnerHTML={{ __html: buildSectionedHTML(result.lesson || "") }}
                   />
 
                   {/* CHAT */}
