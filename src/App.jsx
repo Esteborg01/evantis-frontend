@@ -77,7 +77,8 @@ function humanLabelModule(m) {
 }
 
 function humanLabelLevel(l) {
-  return l === "internado" ? "Clínica" : l === "pregrado" ? "Pregrado" : "Automática";
+  // UI: “Profundidad”
+  return l === "internado" ? "Clínica" : l === "pregrado" ? "Pregrado" : "Adaptativa";
 }
 
 /* =========================
@@ -109,46 +110,55 @@ function normalizeCurriculumTree(raw) {
    MARKDOWN → BLOQUES PDF
 ========================= */
 function parseMarkdownToBlocks(md = "") {
-  return md.split("\n").map((line) => {
-    const t = line.trim();
-    if (!t) return { type: "space" };
-    if (t.startsWith("## ")) return { type: "h2", text: t.slice(3) };
-    if (t.startsWith("# ")) return { type: "h1", text: t.slice(2) };
-    if (t.startsWith("- ")) return { type: "li", text: t.slice(2) };
-    return { type: "p", text: t };
-  });
+  return String(md || "")
+    .split("\n")
+    .map((line) => {
+      const t = line.trim();
+      if (!t) return { type: "space" };
+      if (t.startsWith("## ")) return { type: "h2", text: t.slice(3) };
+      if (t.startsWith("# ")) return { type: "h1", text: t.slice(2) };
+      if (t.startsWith("- ")) return { type: "li", text: t.slice(2) };
+      return { type: "p", text: t };
+    });
 }
 
+/* =========================
+   MARKDOWN → HTML (UI)
+========================= */
 marked.setOptions({
   gfm: true,
   breaks: true,
   headerIds: false,
   mangle: false,
-  async: false, // ✅ CLAVE para que marked.parse devuelva string
 });
 
 function renderAcademicHTML(md = "") {
-  try {
-    const raw = String(md || "");
-    const html = marked.parse(raw); // sync (string)
-    return DOMPurify.sanitize(String(html || ""));
-  } catch (e) {
-    console.error("renderAcademicHTML error:", e);
-    return "<p>Error al renderizar contenido.</p>";
-  }
+  const raw = String(md || "");
+  const html = marked.parse(raw);
+  return DOMPurify.sanitize(html);
 }
 
 /* =========================
    BANNER (alerts)
+   (quitamos “OK:” y “Estado: sesión…”, dejamos solo error
+   y un notice discreto)
 ========================= */
-function Banner({ authStatus, notice, error }) {
-  if (!error) return null;
+function Banner({ notice, error }) {
+  if (!error && !notice) return null;
 
   return (
     <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-      <div className="ev-alert err">
-        <span className="k">Error:</span> {error}
-      </div>
+      {error ? (
+        <div className="ev-alert err">
+          <span className="k">Error:</span> {error}
+        </div>
+      ) : null}
+
+      {!error && notice ? (
+        <div className="ev-alert" style={{ opacity: 0.9 }}>
+          {notice}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -161,7 +171,6 @@ export default function App() {
   const [password, setPassword] = useState("");
   const [token, setToken] = useState(localStorage.getItem(LS_TOKEN) || "");
   const [me, setMe] = useState(null);
-  const [authStatus, setAuthStatus] = useState("");
   const [usage, setUsage] = useState(null);
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
 
@@ -362,11 +371,6 @@ export default function App() {
     } catch {}
   }, [token]);
 
-  useEffect(() => {
-    if (!token) return;
-    fetchUsage(token);
-  }, [token]);
-
   // =========================
   // LOAD /auth/me
   // =========================
@@ -404,10 +408,31 @@ export default function App() {
   }, []);
 
   // =========================
+  // USAGE
+  // =========================
+  async function fetchUsage(currentToken) {
+    try {
+      const res = await fetch(`${API_BASE}/usage/me`, {
+        headers: {
+          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+          Authorization: `Bearer ${currentToken}`,
+        },
+      });
+      if (!res.ok) return;
+      const data = await res.json();
+      setUsage(data);
+    } catch {}
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    fetchUsage(token);
+  }, [token]);
+
+  // =========================
   // ACTIONS
   // =========================
   async function handleLogin() {
-    setAuthStatus("Iniciando sesión…");
     setError("");
     setNotice("");
 
@@ -435,7 +460,8 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail =
+          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -443,16 +469,13 @@ export default function App() {
       if (!tkn) throw new Error("Login OK, pero no se recibió access_token.");
 
       setToken(tkn);
-      setAuthStatus("Sesión iniciada.");
       setNotice("Sesión iniciada.");
     } catch (e) {
-      setAuthStatus("");
       setError(e?.message || "Error de login.");
     }
   }
 
   async function handleRegister() {
-    setAuthStatus("Creando cuenta…");
     setError("");
     setNotice("");
 
@@ -478,7 +501,8 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail =
+          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -486,11 +510,9 @@ export default function App() {
       if (!tkn) throw new Error("Registro OK, pero no se recibió access_token.");
 
       setToken(tkn);
-      setAuthStatus("Cuenta creada. Sesión iniciada.");
       setNotice("Cuenta creada. Sesión iniciada.");
       setAuthMode("login");
     } catch (e) {
-      setAuthStatus("");
       setError(e?.message || "Error de registro.");
     }
   }
@@ -498,8 +520,8 @@ export default function App() {
   function handleLogout() {
     setToken("");
     setMe(null);
-    setAuthStatus("Sesión cerrada.");
-    setNotice("Sesión cerrada.");
+    setNotice("");
+    setError("");
 
     setResult(null);
     setActiveSavedKey("");
@@ -528,22 +550,13 @@ export default function App() {
 
     if (module === "enarm" && !enarmContext) return "Para ENARM debes confirmar el modo ENARM (check).";
     if (module === "gpc_summary" && !useGuides) return "Resumen GPC requiere usar guías actualizadas.";
-    if (durationMinutes < 5 || durationMinutes > 120) return "Duración inválida (5–120 min recomendado).";
+    if (Number(durationMinutes) < 5 || Number(durationMinutes) > 120)
+      return "Duración inválida (5–120 min recomendado).";
     if (module === "enarm" || module === "exam") {
-      if (numQuestions < 5 || numQuestions > 200) return "Número de preguntas inválido (5–200).";
+      if (Number(numQuestions) < 5 || Number(numQuestions) > 200)
+        return "Número de preguntas inválido (5–200).";
     }
     return "";
-  }
-
-  async function fetchUsage(currentToken) {
-    try {
-      const res = await fetch(`${API_BASE}/usage/me`, {
-        headers: { Authorization: `Bearer ${currentToken}` },
-      });
-      if (!res.ok) return;
-      const data = await res.json();
-      setUsage(data);
-    } catch {}
   }
 
   async function handleGenerate() {
@@ -712,7 +725,7 @@ export default function App() {
       }
     }
 
-    setNotice("Clase eliminada de Mis clases.");
+    setNotice("Clase eliminada.");
     setError("");
   }
 
@@ -788,7 +801,9 @@ export default function App() {
         if (filterSavedModule !== "all" && x.module !== filterSavedModule) return false;
         if (filterSavedLevel !== "all" && x.level !== filterSavedLevel) return false;
         if (!q) return true;
-        const hay = `${x.title || ""} ${x.subject_name || ""} ${x.topic_name || ""} ${x.module || ""} ${x.level || ""}`.toLowerCase();
+        const hay = `${x.title || ""} ${x.subject_name || ""} ${x.topic_name || ""} ${x.module || ""} ${
+          x.level || ""
+        }`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -834,7 +849,7 @@ export default function App() {
 
         doc.setFont("helvetica", "normal");
         doc.setFontSize(9);
-        const right = `Session: ${result?.session_id || "—"}`;
+        const right = `Plan: ${me?.plan || "—"}`;
         doc.text(right, pageWidth - marginX, marginTop, { align: "right" });
 
         doc.setLineWidth(0.2);
@@ -847,6 +862,7 @@ export default function App() {
         doc.text(`Página ${pageNo} de ${totalPages}`, pageWidth - marginX, footerY, { align: "right" });
       };
 
+      // COVER
       doc.setFont("helvetica", "bold");
       doc.setFontSize(26);
       doc.text("E-Vantis", marginX, 40);
@@ -874,8 +890,6 @@ export default function App() {
         `Profundidad: ${humanLabelLevel(result?.level) || "—"}`,
         `Duración: ${result?.duration_minutes ? `${result.duration_minutes} min` : "—"}`,
         `Fecha: ${new Date().toLocaleString()}`,
-        `Session ID: ${result?.session_id || "—"}`,
-        `Plan: ${me?.plan || "—"}`,
       ];
 
       let metaY = 100;
@@ -960,6 +974,7 @@ export default function App() {
         }
       }
 
+      // Chat al final (si existe)
       const sid = result?.session_id;
       const chat = sid ? getChatForSession(sid) : [];
       if (Array.isArray(chat) && chat.length > 0) {
@@ -969,7 +984,6 @@ export default function App() {
         y += 6;
 
         writeHeading("Chat académico", 14, 2);
-
         doc.setFont("helvetica", "normal");
         doc.setFontSize(10);
 
@@ -1029,20 +1043,12 @@ export default function App() {
             <div className="ev-logo" />
             <div>
               <div className="ev-title">E-Vantis</div>
-              {/* <div className="ev-sub">Acceso • Registro • Plan Free</div> */}
               <div className="ev-sub">Plataforma académica</div>
             </div>
           </div>
-
-          {/*
-          <div className="ev-row">
-            <span className="ev-pill">API: <b>{API_BASE}</b></span>
-            <span className="ev-pill">Curriculum: <b>embebido</b></span>
-          </div>
-          */}
         </div>
 
-        <Banner authStatus={authStatus} notice={notice} error={error} />
+        <Banner notice={notice} error={error} />
 
         <div className="ev-card" style={{ marginTop: 14 }}>
           <div className="ev-card-h">
@@ -1069,22 +1075,32 @@ export default function App() {
               <div style={{ flex: 1 }}>
                 <div className="ev-field">
                   <label className="ev-label">Email</label>
-                  <input className="ev-input" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="tu@email.com" />
+                  <input
+                    className="ev-input"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="tu@email.com"
+                    autoComplete="email"
+                  />
                 </div>
               </div>
               <div style={{ flex: 1 }}>
                 <div className="ev-field">
                   <label className="ev-label">Password</label>
-                  <input className="ev-input" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
+                  <input
+                    className="ev-input"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    autoComplete={authMode === "register" ? "new-password" : "current-password"}
+                  />
                 </div>
               </div>
             </div>
 
             <div className="ev-row" style={{ marginTop: 10 }}>
-              <button
-                className="ev-btn ev-btn-primary"
-                onClick={authMode === "register" ? handleRegister : handleLogin}
-              >
+              <button className="ev-btn ev-btn-primary" onClick={authMode === "register" ? handleRegister : handleLogin}>
                 {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
               </button>
               <div className="ev-muted" style={{ fontSize: 12 }}>
@@ -1120,30 +1136,40 @@ export default function App() {
             Plan: <b>{me?.plan || "—"}</b>
           </span>
           {hasPro ? <span className="ev-badge ev-badge-accent">Pro/Premium</span> : <span className="ev-badge">Free</span>}
-          <button className="ev-btn" onClick={handleLogout}>Logout</button>
+          <button className="ev-btn" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </div>
 
+      {/* Uso mensual (sin paréntesis / sin periodo en el título) */}
       {usage?.modules && (
         <div className="ev-card" style={{ marginTop: 14 }}>
           <div className="ev-card-h">
             <div>
               <div className="ev-card-t">Uso mensual</div>
               <div className="ev-card-d">
-                lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
+                lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm{" "}
+                {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
               </div>
             </div>
+
             {SHOW_DEBUG_PILLS ? (
               <div className="ev-row">
-                <span className="ev-pill">API: <b>{API_BASE}</b></span>
-                <span className="ev-pill">Curriculum: <b>embebido</b></span>
+                <span className="ev-pill">
+                  API: <b>{API_BASE}</b>
+                </span>
+                <span className="ev-pill">
+                  Curriculum: <b>embebido</b>
+                </span>
               </div>
             ) : null}
           </div>
         </div>
       )}
 
-      <Banner authStatus={authStatus} notice={notice} error={error} />
+      {/* Sin “Estado: sesión iniciada.” / sin “OK:” */}
+      <Banner notice={notice} error={error} />
 
       <div className="ev-grid">
         {/* LEFT */}
@@ -1153,7 +1179,9 @@ export default function App() {
               <div className="ev-card-t">Crear contenido</div>
               <div className="ev-card-d">Selecciona Materia → Tema → Subtema y el Módulo.</div>
             </div>
-            <span className="ev-badge">{selectedSubject?.npm_profile ? `Perfil: ${selectedSubject.npm_profile}` : "Perfil: —"}</span>
+            <span className="ev-badge">
+              {selectedSubject?.npm_profile ? `Perfil: ${selectedSubject.npm_profile}` : "Perfil: —"}
+            </span>
           </div>
 
           <div className="ev-card-b">
@@ -1162,25 +1190,26 @@ export default function App() {
               <select className="ev-select" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">— Selecciona —</option>
                 {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
 
             <div className="ev-field">
               <label className="ev-label">Tema</label>
-              <select
-                className="ev-select"
-                value={topicId}
-                onChange={(e) => setTopicId(e.target.value)}
-                disabled={!subjectId}
-              >
+              <select className="ev-select" value={topicId} onChange={(e) => setTopicId(e.target.value)} disabled={!subjectId}>
                 <option value="">— Selecciona —</option>
                 {blocks.map((b) => (
                   <React.Fragment key={b.id}>
-                    <option value="" disabled>— {b.name} —</option>
+                    <option value="" disabled>
+                      — {b.name} —
+                    </option>
                     {(b.macro_topics || []).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
                     ))}
                   </React.Fragment>
                 ))}
@@ -1199,7 +1228,9 @@ export default function App() {
                   {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
                 </option>
                 {(selectedTopic?.subtopics || []).map((st) => (
-                  <option key={st.id} value={st.id}>{st.name}</option>
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1208,18 +1239,22 @@ export default function App() {
               <label className="ev-label">Qué quieres generar</label>
               <select className="ev-select" value={module} onChange={(e) => setModule(e.target.value)}>
                 {moduleOptions.map((m) => (
-                  <option key={m} value={m}>{humanLabelModule(m)}</option>
+                  <option key={m} value={m}>
+                    {humanLabelModule(m)}
+                  </option>
                 ))}
               </select>
               {!hasPro && moduleOptions.includes("gpc_summary") === false && (
-                <div className="ev-muted" style={{ fontSize: 12 }}>Resumen GPC requiere Pro/Premium.</div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Resumen GPC requiere Pro/Premium.
+                </div>
               )}
             </div>
 
             <div className="ev-field">
               <label className="ev-label">Profundidad</label>
               <select className="ev-select" value={level} onChange={(e) => setLevel(e.target.value)}>
-                <option value="auto">Automática</option>
+                <option value="auto">Adaptativa</option>
                 <option value="pregrado">Pregrado</option>
                 <option value="internado">Clínica</option>
               </select>
@@ -1229,7 +1264,14 @@ export default function App() {
               <div style={{ flex: 1 }}>
                 <div className="ev-field">
                   <label className="ev-label">Duración (min)</label>
-                  <input className="ev-input" type="number" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} min={5} max={120} />
+                  <input
+                    className="ev-input"
+                    type="number"
+                    value={durationMinutes}
+                    onChange={(e) => setDurationMinutes(e.target.value)}
+                    min={5}
+                    max={120}
+                  />
                 </div>
               </div>
 
@@ -1283,7 +1325,7 @@ export default function App() {
             )}
 
             <button
-              className={`ev-btn ev-btn-primary`}
+              className="ev-btn ev-btn-primary"
               onClick={handleGenerate}
               disabled={isGenerating || quotaBlocked}
               style={{ width: "100%", marginTop: 10 }}
@@ -1304,9 +1346,7 @@ export default function App() {
             <div className="ev-card-h">
               <div>
                 <div className="ev-card-t">Resultado</div>
-                <div className="ev-card-d">
-                  {result ? "Contenido generado." : "Aún no hay contenido generado."}
-                </div>
+                <div className="ev-card-d">{result ? "Contenido generado." : "Aún no hay contenido generado."}</div>
               </div>
 
               <div className="ev-row">
@@ -1324,15 +1364,17 @@ export default function App() {
               {result ? (
                 <>
                   <div style={{ fontSize: 16, fontWeight: 900 }}>{result.title}</div>
+
                   <div className="ev-muted" style={{ fontSize: 12, marginTop: 6 }}>
                     <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} • <b>Módulo:</b>{" "}
                     {humanLabelModule(result.module)} • <b>Profundidad:</b> {humanLabelLevel(result.level)} •{" "}
                     <b>Duración:</b> {result.duration_minutes} min
                   </div>
 
+                  {/* CONTENIDO (Markdown → HTML) */}
                   <div
-                    style={{ marginTop: 12 }}
                     className="ev-content"
+                    style={{ marginTop: 12 }}
                     dangerouslySetInnerHTML={{ __html: renderAcademicHTML(result.lesson || "") }}
                   />
 
@@ -1360,14 +1402,27 @@ export default function App() {
                               No hay mensajes aún. Escribe tu primera duda.
                             </div>
                           ) : (
-                            chatMessages.map((m, idx) => (
-                              <div key={`${m.created_at || "t"}_${idx}`} style={{ marginBottom: 12 }}>
-                                <div className="ev-muted" style={{ fontSize: 12 }}>
-                                  <b>{m.role === "user" ? "Tú" : "E-Vantis"}</b> · {m.created_at}
+                            chatMessages.map((m, idx) => {
+                              const isUser = m.role === "user";
+                              const content = String(m.content || "");
+                              return (
+                                <div key={`${m.created_at || "t"}_${idx}`} style={{ marginBottom: 12 }}>
+                                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                                    <b>{isUser ? "Tú" : "E-Vantis"}</b> · {m.created_at}
+                                  </div>
+
+                                  {isUser ? (
+                                    <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>{content}</div>
+                                  ) : (
+                                    <div
+                                      className="ev-content"
+                                      style={{ marginTop: 6 }}
+                                      dangerouslySetInnerHTML={{ __html: renderAcademicHTML(content) }}
+                                    />
+                                  )}
                                 </div>
-                                <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>{m.content}</div>
-                              </div>
-                            ))
+                              );
+                            })
                           )}
                         </div>
 
@@ -1427,7 +1482,9 @@ export default function App() {
                 <select className="ev-select" value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)}>
                   <option value="all">Materia</option>
                   {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
                   ))}
                 </select>
 
@@ -1441,7 +1498,7 @@ export default function App() {
 
                 <select className="ev-select" value={filterSavedLevel} onChange={(e) => setFilterSavedLevel(e.target.value)}>
                   <option value="all">Nivel</option>
-                  <option value="auto">Automática</option>
+                  <option value="auto">Adaptativa</option>
                   <option value="pregrado">Pregrado</option>
                   <option value="internado">Clínica</option>
                 </select>
@@ -1449,12 +1506,18 @@ export default function App() {
 
               <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
                 {filteredSaved.length === 0 ? (
-                  <div className="ev-muted" style={{ fontSize: 12 }}>No hay clases guardadas con esos filtros.</div>
+                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                    No hay clases guardadas con esos filtros.
+                  </div>
                 ) : (
                   filteredSaved.map((item) => {
                     const active = item.saved_key && item.saved_key === activeSavedKey;
                     return (
-                      <div key={item.saved_key || item.session_id} className="ev-card" style={{ border: active ? "1px solid rgba(30,203,225,0.55)" : undefined }}>
+                      <div
+                        key={item.saved_key || item.session_id}
+                        className="ev-card"
+                        style={{ border: active ? "1px solid rgba(30,203,225,0.55)" : undefined }}
+                      >
                         <div className="ev-card-b">
                           <div className="ev-spread">
                             <div style={{ flex: 1 }}>
@@ -1463,13 +1526,17 @@ export default function App() {
                                 <b>{item.subject_name}</b> • {item.topic_name} • {humanLabelModule(item.module)} • {humanLabelLevel(item.level)}
                               </div>
                               <div className="ev-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                                {item.created_at ? `Creado: ${item.created_at}` : ""} {item.session_id ? ` • session: ${item.session_id}` : ""}
+                                {item.created_at ? `Creado: ${item.created_at}` : ""}
                               </div>
                             </div>
 
                             <div className="ev-row">
-                              <button className="ev-btn" onClick={() => openSaved(item)}>Abrir</button>
-                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>Eliminar</button>
+                              <button className="ev-btn" onClick={() => openSaved(item)}>
+                                Abrir
+                              </button>
+                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>
+                                Eliminar
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1484,8 +1551,9 @@ export default function App() {
       </div>
 
       <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
-        E-Vantis — UI para alumnos. Siguiente: pulir copy, ocultar tecnicismos y agregar onboarding.
+        E-Vantis — UI para alumnos.
       </div>
     </div>
   );
 }
+
