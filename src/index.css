@@ -232,3 +232,106 @@ body{
   border-radius: 8px;
   background: rgba(0,0,0,0.18);
 }
+
+/* =========================
+   E-VANTIS — Render académico (Markdown -> HTML)
+========================= */
+.ev-content {
+  font-size: 14px;
+  line-height: 1.65;
+  color: rgba(255,255,255,0.92);
+}
+
+.ev-content h1,
+.ev-content h2,
+.ev-content h3 {
+  margin: 14px 0 8px;
+  line-height: 1.25;
+}
+
+.ev-content h1 { font-size: 22px; font-weight: 900; }
+.ev-content h2 { font-size: 18px; font-weight: 900; }
+.ev-content h3 { font-size: 16px; font-weight: 800; }
+
+.ev-content p {
+  margin: 8px 0;
+}
+
+.ev-content strong {
+  font-weight: 900;
+}
+
+.ev-content em {
+  font-style: italic;
+}
+
+.ev-content ul,
+.ev-content ol {
+  margin: 10px 0 10px 20px;
+  padding: 0;
+}
+
+.ev-content li {
+  margin: 6px 0;
+}
+
+.ev-content hr {
+  border: 0;
+  height: 1px;
+  margin: 14px 0;
+  background: rgba(255,255,255,0.12);
+}
+
+.ev-content blockquote {
+  margin: 10px 0;
+  padding: 10px 12px;
+  border-left: 3px solid rgba(30,203,225,0.55);
+  background: rgba(255,255,255,0.06);
+  border-radius: 12px;
+}
+
+.ev-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(255,255,255,0.08);
+}
+
+.ev-content pre {
+  margin: 10px 0;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(0,0,0,0.25);
+  overflow: auto;
+}
+
+.ev-content pre code {
+  padding: 0;
+  background: transparent;
+}
+
+.ev-content table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 12px 0;
+  overflow: hidden;
+  border-radius: 14px;
+}
+
+.ev-content th,
+.ev-content td {
+  border: 1px solid rgba(255,255,255,0.10);
+  padding: 10px;
+  vertical-align: top;
+}
+
+.ev-content th {
+  background: rgba(255,255,255,0.08);
+  font-weight: 900;
+}
+
+.ev-content a {
+  color: rgba(111,255,233,0.95);
+  text-decoration: underline;
+}
