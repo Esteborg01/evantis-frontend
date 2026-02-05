@@ -12,6 +12,7 @@ const AUTH_LOGIN_PATH = "/auth/login";
 const AUTH_REGISTER_PATH = "/auth/register";
 const AUTH_ME_PATH = "/auth/me";
 const TEACH_CURRICULUM_PATH = "/teach/curriculum";
+const SHOW_DEBUG_PILLS = false;
 
 /* =========================
    STORAGE KEYS
@@ -1019,14 +1020,17 @@ export default function App() {
             <div className="ev-logo" />
             <div>
               <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Acceso • Registro • Plan Free</div>
+              {/* <div className="ev-sub">Acceso • Registro • Plan Free</div> */}
+              <div className="ev-sub">Plataforma académica</div>
             </div>
           </div>
 
+          {/*
           <div className="ev-row">
             <span className="ev-pill">API: <b>{API_BASE}</b></span>
             <span className="ev-pill">Curriculum: <b>embebido</b></span>
           </div>
+          */}
         </div>
 
         <Banner authStatus={authStatus} notice={notice} error={error} />
@@ -1120,10 +1124,12 @@ export default function App() {
                 lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
               </div>
             </div>
-            <div className="ev-row">
-              <span className="ev-pill">API: <b>{API_BASE}</b></span>
-              <span className="ev-pill">Curriculum: <b>embebido</b></span>
-            </div>
+            {SHOW_DEBUG_PILLS ? (
+              <div className="ev-row">
+                <span className="ev-pill">API: <b>{API_BASE}</b></span>
+                <span className="ev-pill">Curriculum: <b>embebido</b></span>
+              </div>
+            ) : null}
           </div>
         </div>
       )}
