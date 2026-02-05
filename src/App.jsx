@@ -121,25 +121,13 @@ function parseMarkdownToBlocks(md = "") {
    BANNER (alerts)
 ========================= */
 function Banner({ authStatus, notice, error }) {
-  if (!notice && !error && !authStatus) return null;
+  if (!error) return null;
 
   return (
     <div style={{ display: "grid", gap: 10, marginTop: 14 }}>
-      {authStatus && (
-        <div className="ev-alert">
-          <span className="k">Estado:</span> {authStatus}
-        </div>
-      )}
-      {notice && (
-        <div className="ev-alert ok">
-          <span className="k">OK:</span> {notice}
-        </div>
-      )}
-      {error && (
-        <div className="ev-alert err">
-          <span className="k">Error:</span> {error}
-        </div>
-      )}
+      <div className="ev-alert err">
+        <span className="k">Error:</span> {error}
+      </div>
     </div>
   );
 }
@@ -1119,7 +1107,7 @@ export default function App() {
         <div className="ev-card" style={{ marginTop: 14 }}>
           <div className="ev-card-h">
             <div>
-              <div className="ev-card-t">Uso mensual ({usage.yyyymm})</div>
+              <div className="ev-card-t">Uso mensual</div>
               <div className="ev-card-d">
                 lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
               </div>
@@ -1296,13 +1284,7 @@ export default function App() {
               <div>
                 <div className="ev-card-t">Resultado</div>
                 <div className="ev-card-d">
-                  {result?.session_id ? (
-                    <>
-                      Session: <span className="ev-code">{result.session_id}</span>
-                    </>
-                  ) : (
-                    "Aún no hay contenido generado."
-                  )}
+                  {result ? "Contenido generado." : "Aún no hay contenido generado."}
                 </div>
               </div>
 
