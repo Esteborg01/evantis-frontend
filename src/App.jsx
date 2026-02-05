@@ -124,12 +124,18 @@ marked.setOptions({
   breaks: true,
   headerIds: false,
   mangle: false,
+  async: false, // ✅ CLAVE para que marked.parse devuelva string
 });
 
 function renderAcademicHTML(md = "") {
-  const raw = String(md || "");
-  const html = marked.parse(raw);
-  return DOMPurify.sanitize(html);
+  try {
+    const raw = String(md || "");
+    const html = marked.parse(raw); // sync (string)
+    return DOMPurify.sanitize(String(html || ""));
+  } catch (e) {
+    console.error("renderAcademicHTML error:", e);
+    return "<p>Error al renderizar contenido.</p>";
+  }
 }
 
 /* =========================
@@ -1324,10 +1330,11 @@ export default function App() {
                     <b>Duración:</b> {result.duration_minutes} min
                   </div>
 
-                  <div style={{ marginTop: 12 }}>
+                  <div
+                    style={{ marginTop: 12 }}
                     className="ev-content"
                     dangerouslySetInnerHTML={{ __html: renderAcademicHTML(result.lesson || "") }}
-                  </div>
+                  />
 
                   {/* CHAT */}
                   <div className="ev-card" style={{ marginTop: 12 }}>
