@@ -190,3 +190,45 @@ body{
   line-height: 1.5;
   white-space: pre-wrap;
 }
+
+.ev-content {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: normal;
+}
+
+.ev-content h1 {
+  font-size: 18px;
+  margin: 0 0 10px 0;
+  font-weight: 900;
+}
+
+.ev-content h2 {
+  font-size: 15px;
+  margin: 14px 0 8px 0;
+  font-weight: 800;
+}
+
+.ev-content p {
+  margin: 8px 0;
+}
+
+.ev-content ul {
+  margin: 8px 0 8px 18px;
+}
+
+.ev-content li {
+  margin: 4px 0;
+}
+
+.ev-content strong {
+  font-weight: 900;
+}
+
+.ev-content code {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.18);
+}

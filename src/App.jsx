@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import jsPDF from "jspdf";
 import CURRICULUM_EMBEDDED from "./evantis.curriculum.v1.json";
+import { marked } from "marked";
+import DOMPurify from "dompurify";
 
 /* =========================
    CONFIG
@@ -115,6 +117,19 @@ function parseMarkdownToBlocks(md = "") {
     if (t.startsWith("- ")) return { type: "li", text: t.slice(2) };
     return { type: "p", text: t };
   });
+}
+
+marked.setOptions({
+  gfm: true,
+  breaks: true,
+  headerIds: false,
+  mangle: false,
+});
+
+function renderAcademicHTML(md = "") {
+  const raw = String(md || "");
+  const html = marked.parse(raw);
+  return DOMPurify.sanitize(html);
 }
 
 /* =========================
@@ -1310,7 +1325,8 @@ export default function App() {
                   </div>
 
                   <div style={{ marginTop: 12 }}>
-                    <textarea readOnly value={result.lesson || ""} className="ev-textarea" />
+                    className="ev-content"
+                    dangerouslySetInnerHTML={{ __html: renderAcademicHTML(result.lesson || "") }}
                   </div>
 
                   {/* CHAT */}
