@@ -842,116 +842,148 @@ export default function App() {
   // =========================
   // ACTIONS
   // =========================
-  async function handleLogin() {
-    setError("");
-    setNotice("");
-
-    try {
-      const body = new URLSearchParams();
-      body.set("grant_type", "password");
-      body.set("username", email);
-      body.set("password", password);
-
-      const res = await fetch(`${API_BASE}${AUTH_LOGIN_PATH}`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-        },
-        body: body.toString(),
-      });
-
-      const rawText = await res.text();
-      let data;
-      try {
-        data = JSON.parse(rawText);
-      } catch {
-        data = { detail: rawText };
-      }
-
-      if (!res.ok) {
-        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
-
-        // NUEVO: email no verificado
-        if (res.status === 403 && /no verificado|verifica/i.test(detail)) {
-          // Si backend manda link / token en detail, lo mostramos tal cual.
-          setError(detail);
-          setNotice("Revisa tu correo. Si abriste el link de verificación, vuelve aquí e intenta login.");
-          return;
-        }
-
-        throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
-      }
-
-      const tkn = data?.access_token || "";
-      if (!tkn) throw new Error("Login OK, pero no se recibió access_token.");
-
-      setToken(tkn);
-      setNotice("Sesión iniciada.");
-    } catch (e) {
-      setError(e?.message || "Error de login.");
-    }
+  // Helpers (opcional)
+  async function readJsonSafe(resp) {
+    const text = await resp.text();
+    try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
   }
 
-  async function handleRegister() {
+  function normalizeDetail(data) {
+    return (data && (data.detail || data.message || data.error)) || "";
+  }
+
+  // === LOGIN (para evitar "handleLogin is not defined") ===
+  async function handleLogin(e) {
+    e?.preventDefault?.();
     setError("");
     setNotice("");
+    setAuthStatus("");
+
+    const emailTrim = (email || "").trim().toLowerCase();
+    if (!emailTrim || !password) {
+      setError("Completa email y password.");
+      return;
+    }
 
     try {
-      const res = await fetch(`${API_BASE}${AUTH_REGISTER_PATH}`, {
+      setAuthStatus("Iniciando sesión...");
+
+      const resp = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
-        },
-        body: JSON.stringify({
-          email: (email || "").trim(),
-          password: password || "",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailTrim, password }),
       });
 
-      const rawText = await res.text();
+      const data = await readJsonSafe(resp);
 
-      // Intentar parsear JSON; si no, dejar el texto
-      let data = null;
-      try {
-        data = rawText ? JSON.parse(rawText) : null;
-      } catch {
-        data = null;
-      }
-
-      if (!res.ok) {
-        const detailRaw = data?.detail ?? data?.message ?? rawText ?? `HTTP ${res.status}`;
-        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
-        throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
-      }
-
-      // ✅ Caso A: backend sí regresa token (modo antiguo o sin verificación)
-      const tkn = (data?.access_token || "").trim();
-      if (tkn) {
-        setToken(tkn);
-        setNotice("Cuenta creada. Sesión iniciada.");
-        setAuthMode("login");
+      if (!resp.ok) {
+        const detail = normalizeDetail(data);
+        // Mensaje amigable si backend manda "Correo no verificado"
+        if (resp.status === 403 && /verificad/i.test(detail)) {
+          setError("Correo no verificado. Revisa tu bandeja o solicita reenvío del enlace.");
+        } else {
+          setError(detail || `Login falló (HTTP ${resp.status}).`);
+        }
+        setAuthStatus("");
         return;
       }
 
-      // ✅ Caso B: backend NO regresa token (flujo nuevo: verificar email)
-      // Tomamos un mensaje útil si viene en payload.
-      const msgRaw =
-        data?.message ||
-        data?.detail ||
-        "Cuenta creada. Revisa tu correo para verificar tu cuenta y después inicia sesión.";
+      const accessToken = data?.access_token || data?.token || "";
+      if (!accessToken) {
+        setError("Login OK, pero no se recibió access_token.");
+        setAuthStatus("");
+        return;
+      }
 
-      const msg = typeof msgRaw === "string" ? msgRaw : JSON.stringify(msgRaw);
+      localStorage.setItem(LS_TOKEN, accessToken);
+      setToken(accessToken);
+      setAuthStatus("OK");
+      setNotice("Sesión iniciada.");
+    } catch (err) {
+      setError(`Error de red en login: ${err?.message || String(err)}`);
+      setAuthStatus("");
+    }
+  }
 
-      setNotice(msg);
-      setAuthMode("login");
+  // === REGISTER (corregido: NO exige access_token) ===
+  async function handleRegister(e) {
+    e?.preventDefault?.();
+    setError("");
+    setNotice("");
+    setAuthStatus("");
 
-      // Opcional UX: dejar el password vacío (evita reintentos con password visible)
-      // setPassword("");
+    const emailTrim = (email || "").trim().toLowerCase();
+    if (!emailTrim || !password) {
+      setError("Completa email y password.");
+      return;
+    }
 
-    } catch (e) {
-      setError(e?.message || "Error de registro.");
+    try {
+      setAuthStatus("Creando cuenta...");
+
+      const resp = await fetch(`${API_BASE}/auth/register`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailTrim, password }),
+      });
+
+      const data = await readJsonSafe(resp);
+
+      if (!resp.ok) {
+        const detail = normalizeDetail(data);
+        if (resp.status === 409) {
+          setError("Registro falló (HTTP 409). Ese email ya está registrado.");
+        } else {
+          setError(detail || `Registro falló (HTTP ${resp.status}).`);
+        }
+        setAuthStatus("");
+        return;
+      }
+
+      // ✅ Flujo correcto: registro NO necesariamente entrega token
+      // Si tu backend A VECES entrega access_token, lo aceptamos, pero no lo exigimos.
+      const accessToken = data?.access_token || data?.token || "";
+
+      if (accessToken) {
+        localStorage.setItem(LS_TOKEN, accessToken);
+        setToken(accessToken);
+        setNotice("Cuenta creada y sesión iniciada.");
+      } else {
+        setNotice("Cuenta creada. Revisa tu correo para verificar y luego inicia sesión.");
+      }
+
+      setAuthStatus("OK");
+    } catch (err) {
+      setError(`Error de red en registro: ${err?.message || String(err)}`);
+      setAuthStatus("");
+    }
+  }
+
+  // === (Opcional) Reenviar verificación ===
+  async function handleResendVerification() {
+    setError("");
+    setNotice("");
+    const emailTrim = (email || "").trim().toLowerCase();
+    if (!emailTrim) {
+      setError("Escribe tu email para reenviar el enlace.");
+      return;
+    }
+
+    try {
+      const resp = await fetch(`${API_BASE}/auth/resend-verification`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailTrim }),
+      });
+      const data = await readJsonSafe(resp);
+
+      if (!resp.ok) {
+        setError(normalizeDetail(data) || `No se pudo reenviar (HTTP ${resp.status}).`);
+        return;
+      }
+      setNotice("Listo. Si el correo existe, se envió el enlace de verificación.");
+    } catch (err) {
+      setError(`Error de red: ${err?.message || String(err)}`);
     }
   }
 
