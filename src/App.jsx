@@ -138,11 +138,19 @@ function renderAcademicHTML(md = "") {
   return DOMPurify.sanitize(html);
 }
 
-function normalizeSectionTitle(s = "") {
+function slugify(s = "") {
   return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/g, "")
     .trim()
-    .replace(/[:：]\s*$/, "")
-    .toLowerCase();
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+function normalizeSectionTitle(s = "") {
+  return String(s || "").trim().replace(/[:：]\s*$/, "").toLowerCase();
 }
 
 function sectionKind(title = "") {
@@ -153,6 +161,8 @@ function sectionKind(title = "") {
   if (t.includes("epidemiologia")) return "core";
   if (t.includes("cuadro clinico")) return "core";
   if (t.includes("signos") || t.includes("sintomas")) return "core";
+
+  // Dx / Tx
   if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
   if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
 
@@ -160,174 +170,15 @@ function sectionKind(title = "") {
   if (t.includes("algoritmo")) return "algo";
   if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
 
-  // Otros
-  return "other";
-}
-
-/**
- * Toma Markdown, lo pasa a HTML (marked) + sanitize (DOMPurify),
- * y lo convierte a "secciones" basadas en h2/h3.
- */
-function buildSectionedHTML(md = "") {
-  const sanitized = renderAcademicHTML(md); // ya es HTML seguro
-  const doc = new DOMParser().parseFromString(sanitized, "text/html");
-  const body = doc.body;
-
-  const sections = [];
-  let current = { title: "Contenido", kind: "other", nodes: [] };
-
-  const flush = () => {
-    const hasContent = current.nodes.some((n) => {
-      const t = (n.textContent || "").trim();
-      return t.length > 0 || n.tagName?.toLowerCase() === "ul" || n.tagName?.toLowerCase() === "ol";
-    });
-    if (hasContent) sections.push(current);
-  };
-
-  Array.from(body.childNodes).forEach((node) => {
-    const el = node.nodeType === 1 ? node : null; // ELEMENT_NODE
-    const tag = el?.tagName?.toLowerCase?.() || "";
-
-    // Usamos h2/h3 como separadores de sección
-    if (tag === "h2" || tag === "h3") {
-      flush();
-      const title = (el.textContent || "").trim() || "Sección";
-      current = { title, kind: sectionKind(title), nodes: [] };
-      return;
-    }
-
-    // Acumulamos el resto
-    if (node.nodeType === 3) {
-      // texto suelto
-      const txt = (node.textContent || "").trim();
-      if (txt) {
-        const p = doc.createElement("p");
-        p.textContent = txt;
-        current.nodes.push(p);
-      }
-      return;
-    }
-
-    if (el) current.nodes.push(el);
-  });
-
-  flush();
-
-  // Render final: wrapper con tarjetas
-  const wrap = doc.createElement("div");
-  wrap.setAttribute("class", "ev-sectioned");
-
-  sections.forEach((s) => {
-    const card = doc.createElement("section");
-    card.setAttribute("class", `ev-section ev-section-${s.kind}`);
-
-    const header = doc.createElement("div");
-    header.setAttribute("class", "ev-section-h");
-
-    const h = doc.createElement("div");
-    h.setAttribute("class", "ev-section-t");
-    h.textContent = s.title;
-
-    header.appendChild(h);
-
-    const content = doc.createElement("div");
-    content.setAttribute("class", "ev-section-b");
-
-    s.nodes.forEach((n) => content.appendChild(n));
-
-    card.appendChild(header);
-    card.appendChild(content);
-    wrap.appendChild(card);
-  });
-
-  return wrap.innerHTML;
-}
-
-function slugify(s = "") {
-  return String(s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
-}
-
-function normalizeSectionTitle(s = "") {
-  return String(s || "").trim().replace(/[:：]\s*$/, "").toLowerCase();
-}
-
-function sectionKind(title = "") {
-  const t = normalizeSectionTitle(title);
-
-  if (t.includes("definicion")) return "core";
-  if (t.includes("epidemiologia")) return "core";
-  if (t.includes("cuadro clinico")) return "core";
-  if (t.includes("signos") || t.includes("sintomas")) return "core";
-
-  if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
-  if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
-
-  if (t.includes("algoritmo")) return "algo";
-  if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
-
+  // Alertas
   if (t.includes("red flags") || t.includes("banderas rojas")) return "danger";
+
   return "other";
 }
 
 function classifyCallout(text = "") {
   const t = String(text || "").trim();
 
-  // Detectores simples (puedes expandirlos luego)
-  if (/^(red\s*flags|banderas\s*rojas)\b/i.test(t)) return "danger";
-  if (/^(criterios|criterio|señales\s*de\s*alarma)\b/i.test(t)) return "info";
-  if (/^(perlas|tip|tips|puntos\s*clave|high[-\s]*yield)\b/i.test(t)) return "tip";
-  if (/^(urgente|emergencia|intervencion\s*inmediata)\b/i.test(t)) return "danger";
-  return "";
-}
-
-/**
- * Markdown -> HTML (marked) -> sanitize (DOMPurify)
- * Luego: secciones por h2/h3 + TOC + <details open> colapsable + callouts.
- */
-function slugify(s = "") {
-  return String(s || "")
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s-]/g, "")
-    .trim()
-    .replace(/\s+/g, "-")
-    .slice(0, 80);
-}
-
-function normalizeSectionTitle(s = "") {
-  return String(s || "").trim().replace(/[:：]\s*$/, "").toLowerCase();
-}
-
-function sectionKind(title = "") {
-  const t = normalizeSectionTitle(title);
-
-  if (t.includes("definicion")) return "core";
-  if (t.includes("epidemiologia")) return "core";
-  if (t.includes("cuadro clinico")) return "core";
-  if (t.includes("signos") || t.includes("sintomas")) return "core";
-
-  if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
-  if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
-
-  if (t.includes("algoritmo")) return "algo";
-  if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
-
-  if (t.includes("red flags") || t.includes("banderas rojas")) return "danger";
-  return "other";
-}
-
-function classifyCallout(text = "") {
-  const t = String(text || "").trim();
-
-  // Detectores simples (puedes expandirlos luego)
   if (/^(red\s*flags|banderas\s*rojas)\b/i.test(t)) return "danger";
   if (/^(criterios|criterio|señales\s*de\s*alarma)\b/i.test(t)) return "info";
   if (/^(perlas|tip|tips|puntos\s*clave|high[-\s]*yield)\b/i.test(t)) return "tip";
@@ -401,9 +252,9 @@ function buildSectionedHTML(md = "") {
   tocList.setAttribute("class", "ev-toc-l");
   toc.appendChild(tocList);
 
-  // Botones TOC (expand/contraer todo)
   const tocActions = doc.createElement("div");
   tocActions.setAttribute("class", "ev-toc-actions");
+  // Nota: esto es HTML “estático”; no usa React events, pero funciona como en tu versión.
   tocActions.innerHTML = `
     <button class="ev-toc-btn" type="button" onclick="
       document.querySelectorAll('.ev-section details').forEach(d=>d.open=true);
@@ -452,7 +303,7 @@ function buildSectionedHTML(md = "") {
     const content = doc.createElement("div");
     content.setAttribute("class", "ev-section-b");
 
-    // Callouts automáticos: si un <p> inicia con keyword, lo convertimos a caja
+    // Callouts automáticos
     s.nodes.forEach((n) => {
       const tag = n?.tagName?.toLowerCase?.() || "";
       if (tag === "p") {
@@ -481,8 +332,6 @@ function buildSectionedHTML(md = "") {
 
 /* =========================
    BANNER (alerts)
-   (quitamos “OK:” y “Estado: sesión…”, dejamos solo error
-   y un notice discreto)
 ========================= */
 function Banner({ notice, error }) {
   if (!error && !notice) return null;
@@ -623,10 +472,7 @@ export default function App() {
   // =========================
   // DERIVED TOPICS
   // =========================
-  const selectedSubject = useMemo(
-    () => subjects.find((s) => s.id === subjectId) || null,
-    [subjects, subjectId]
-  );
+  const selectedSubject = useMemo(() => subjects.find((s) => s.id === subjectId) || null, [subjects, subjectId]);
 
   const blocks = useMemo(() => selectedSubject?.blocks || [], [selectedSubject]);
 
@@ -665,10 +511,7 @@ export default function App() {
     return list;
   }, [blocks]);
 
-  const selectedTopic = useMemo(
-    () => flatTopics.find((t) => t.id === topicId) || null,
-    [flatTopics, topicId]
-  );
+  const selectedTopic = useMemo(() => flatTopics.find((t) => t.id === topicId) || null, [flatTopics, topicId]);
 
   const finalTopicId = useMemo(() => {
     if (!topicId) return "";
@@ -801,8 +644,7 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail =
-          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -842,8 +684,7 @@ export default function App() {
       }
 
       if (!res.ok) {
-        const detail =
-          typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
         throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -891,11 +732,9 @@ export default function App() {
 
     if (module === "enarm" && !enarmContext) return "Para ENARM debes confirmar el modo ENARM (check).";
     if (module === "gpc_summary" && !useGuides) return "Resumen GPC requiere usar guías actualizadas.";
-    if (Number(durationMinutes) < 5 || Number(durationMinutes) > 120)
-      return "Duración inválida (5–120 min recomendado).";
+    if (Number(durationMinutes) < 5 || Number(durationMinutes) > 120) return "Duración inválida (5–120 min recomendado).";
     if (module === "enarm" || module === "exam") {
-      if (Number(numQuestions) < 5 || Number(numQuestions) > 200)
-        return "Número de preguntas inválido (5–200).";
+      if (Number(numQuestions) < 5 || Number(numQuestions) > 200) return "Número de preguntas inválido (5–200).";
     }
     return "";
   }
@@ -928,7 +767,6 @@ export default function App() {
       setNotice("Generando…");
 
       let data = {};
-
       try {
         const res = await fetch(`${API_BASE}${TEACH_CURRICULUM_PATH}`, {
           method: "POST",
@@ -1142,9 +980,7 @@ export default function App() {
         if (filterSavedModule !== "all" && x.module !== filterSavedModule) return false;
         if (filterSavedLevel !== "all" && x.level !== filterSavedLevel) return false;
         if (!q) return true;
-        const hay = `${x.title || ""} ${x.subject_name || ""} ${x.topic_name || ""} ${x.module || ""} ${
-          x.level || ""
-        }`.toLowerCase();
+        const hay = `${x.title || ""} ${x.subject_name || ""} ${x.topic_name || ""} ${x.module || ""} ${x.level || ""}`.toLowerCase();
         return hay.includes(q);
       })
       .sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
@@ -1360,10 +1196,7 @@ export default function App() {
       }
 
       const fileBase =
-        (result?.title || "evantis_documento")
-          .replace(/[^\w\s-]+/g, "")
-          .slice(0, 60)
-          .trim() || "evantis_documento";
+        (result?.title || "evantis_documento").replace(/[^\w\s-]+/g, "").slice(0, 60).trim() || "evantis_documento";
 
       doc.save(`${fileBase}.pdf`);
       setNotice("PDF descargado.");
@@ -1444,9 +1277,7 @@ export default function App() {
               <button className="ev-btn ev-btn-primary" onClick={authMode === "register" ? handleRegister : handleLogin}>
                 {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
               </button>
-              <div className="ev-muted" style={{ fontSize: 12 }}>
-                Al continuar aceptas uso académico. No sustituye juicio clínico.
-              </div>
+              <div className="ev-muted" style={{ fontSize: 12 }}>Al continuar aceptas uso académico. No sustituye juicio clínico.</div>
             </div>
           </div>
         </div>
@@ -1477,13 +1308,10 @@ export default function App() {
             Plan: <b>{me?.plan || "—"}</b>
           </span>
           {hasPro ? <span className="ev-badge ev-badge-accent">Pro/Premium</span> : <span className="ev-badge">Free</span>}
-          <button className="ev-btn" onClick={handleLogout}>
-            Logout
-          </button>
+          <button className="ev-btn" onClick={handleLogout}>Logout</button>
         </div>
       </div>
 
-      {/* Uso mensual (sin paréntesis / sin periodo en el título) */}
       {usage?.modules && (
         <div className="ev-card" style={{ marginTop: 14 }}>
           <div className="ev-card-h">
@@ -1497,19 +1325,14 @@ export default function App() {
 
             {SHOW_DEBUG_PILLS ? (
               <div className="ev-row">
-                <span className="ev-pill">
-                  API: <b>{API_BASE}</b>
-                </span>
-                <span className="ev-pill">
-                  Curriculum: <b>embebido</b>
-                </span>
+                <span className="ev-pill">API: <b>{API_BASE}</b></span>
+                <span className="ev-pill">Curriculum: <b>embebido</b></span>
               </div>
             ) : null}
           </div>
         </div>
       )}
 
-      {/* Sin “Estado: sesión iniciada.” / sin “OK:” */}
       <Banner notice={notice} error={error} />
 
       <div className="ev-grid">
@@ -1531,9 +1354,7 @@ export default function App() {
               <select className="ev-select" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">— Selecciona —</option>
                 {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
-                  </option>
+                  <option key={s.id} value={s.id}>{s.name}</option>
                 ))}
               </select>
             </div>
@@ -1544,13 +1365,9 @@ export default function App() {
                 <option value="">— Selecciona —</option>
                 {blocks.map((b) => (
                   <React.Fragment key={b.id}>
-                    <option value="" disabled>
-                      — {b.name} —
-                    </option>
+                    <option value="" disabled>— {b.name} —</option>
                     {(b.macro_topics || []).map((t) => (
-                      <option key={t.id} value={t.id}>
-                        {t.name}
-                      </option>
+                      <option key={t.id} value={t.id}>{t.name}</option>
                     ))}
                   </React.Fragment>
                 ))}
@@ -1569,9 +1386,7 @@ export default function App() {
                   {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
                 </option>
                 {(selectedTopic?.subtopics || []).map((st) => (
-                  <option key={st.id} value={st.id}>
-                    {st.name}
-                  </option>
+                  <option key={st.id} value={st.id}>{st.name}</option>
                 ))}
               </select>
             </div>
@@ -1580,15 +1395,11 @@ export default function App() {
               <label className="ev-label">Qué quieres generar</label>
               <select className="ev-select" value={module} onChange={(e) => setModule(e.target.value)}>
                 {moduleOptions.map((m) => (
-                  <option key={m} value={m}>
-                    {humanLabelModule(m)}
-                  </option>
+                  <option key={m} value={m}>{humanLabelModule(m)}</option>
                 ))}
               </select>
               {!hasPro && moduleOptions.includes("gpc_summary") === false && (
-                <div className="ev-muted" style={{ fontSize: 12 }}>
-                  Resumen GPC requiere Pro/Premium.
-                </div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>Resumen GPC requiere Pro/Premium.</div>
               )}
             </div>
 
@@ -1654,7 +1465,12 @@ export default function App() {
             {advancedOpen && (
               <div className="ev-alert" style={{ marginTop: 8 }}>
                 <label className="ev-row" style={{ gap: 10, marginBottom: 8 }}>
-                  <input type="checkbox" checked={useGuides} onChange={(e) => setUseGuides(e.target.checked)} disabled={module === "gpc_summary"} />
+                  <input
+                    type="checkbox"
+                    checked={useGuides}
+                    onChange={(e) => setUseGuides(e.target.checked)}
+                    disabled={module === "gpc_summary"}
+                  />
                   <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
                 </label>
 
@@ -1691,10 +1507,7 @@ export default function App() {
               </div>
 
               <div className="ev-row">
-                <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>
-                  Guardar
-                </button>
-
+                <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>Guardar</button>
                 <button className="ev-btn ev-btn-cta" onClick={handleDownloadPDFInstitutional} disabled={!hasPro || !result}>
                   PDF (Pro/Premium)
                 </button>
@@ -1712,7 +1525,6 @@ export default function App() {
                     <b>Duración:</b> {result.duration_minutes} min
                   </div>
 
-                  {/* CONTENIDO (Markdown → HTML) */}
                   <div
                     className="ev-content"
                     style={{ marginTop: 12 }}
@@ -1739,9 +1551,7 @@ export default function App() {
                           style={{ padding: 12, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.10)" }}
                         >
                           {chatMessages.length === 0 ? (
-                            <div className="ev-muted" style={{ fontSize: 12 }}>
-                              No hay mensajes aún. Escribe tu primera duda.
-                            </div>
+                            <div className="ev-muted" style={{ fontSize: 12 }}>No hay mensajes aún. Escribe tu primera duda.</div>
                           ) : (
                             chatMessages.map((m, idx) => {
                               const isUser = m.role === "user";
@@ -1789,18 +1599,14 @@ export default function App() {
                         </div>
 
                         {chatStatus && (
-                          <div className="ev-muted" style={{ marginTop: 8, fontSize: 12 }}>
-                            {chatStatus}
-                          </div>
+                          <div className="ev-muted" style={{ marginTop: 8, fontSize: 12 }}>{chatStatus}</div>
                         )}
                       </div>
                     )}
                   </div>
                 </>
               ) : (
-                <div className="ev-muted" style={{ fontSize: 12 }}>
-                  Genera una clase/examen/caso para ver el contenido aquí.
-                </div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>Genera una clase/examen/caso para ver el contenido aquí.</div>
               )}
             </div>
           </div>
@@ -1823,9 +1629,7 @@ export default function App() {
                 <select className="ev-select" value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)}>
                   <option value="all">Materia</option>
                   {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name}
-                    </option>
+                    <option key={s.id} value={s.id}>{s.name}</option>
                   ))}
                 </select>
 
@@ -1847,9 +1651,7 @@ export default function App() {
 
               <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
                 {filteredSaved.length === 0 ? (
-                  <div className="ev-muted" style={{ fontSize: 12 }}>
-                    No hay clases guardadas con esos filtros.
-                  </div>
+                  <div className="ev-muted" style={{ fontSize: 12 }}>No hay clases guardadas con esos filtros.</div>
                 ) : (
                   filteredSaved.map((item) => {
                     const active = item.saved_key && item.saved_key === activeSavedKey;
@@ -1872,12 +1674,8 @@ export default function App() {
                             </div>
 
                             <div className="ev-row">
-                              <button className="ev-btn" onClick={() => openSaved(item)}>
-                                Abrir
-                              </button>
-                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>
-                                Eliminar
-                              </button>
+                              <button className="ev-btn" onClick={() => openSaved(item)}>Abrir</button>
+                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>Eliminar</button>
                             </div>
                           </div>
                         </div>
@@ -1891,10 +1689,7 @@ export default function App() {
         </div>
       </div>
 
-      <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
-        E-Vantis — UI para alumnos.
-      </div>
+      <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>E-Vantis — UI para alumnos.</div>
     </div>
   );
 }
-
