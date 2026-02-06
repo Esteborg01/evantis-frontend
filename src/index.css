@@ -205,9 +205,7 @@ body{
   box-shadow: 0 0 0 4px rgba(30,203,225,0.12);
 }
 
-.ev-select{
-  appearance: none;
-}
+.ev-select{ appearance: none; }
 
 /* Legacy textarea style used by chat input */
 .ev-textarea{
@@ -261,7 +259,6 @@ body{
 
 /* =========================
    E-VANTIS — Render académico (Markdown -> HTML)
-   ÚNICO BLOQUE .ev-content (sin duplicados)
 ========================= */
 .ev-content{
   font-size: 14px;
@@ -284,10 +281,7 @@ body{
 .ev-content h3{ font-size: 16px; font-weight: 800; }
 
 /* Párrafos */
-.ev-content p{
-  margin: 10px 0;
-}
-
+.ev-content p{ margin: 10px 0; }
 .ev-content strong{ font-weight: 900; }
 .ev-content em{ font-style: italic; }
 
@@ -297,10 +291,7 @@ body{
   margin: 10px 0 10px 22px;
   padding: 0;
 }
-
-.ev-content li{
-  margin: 6px 0;
-}
+.ev-content li{ margin: 6px 0; }
 
 /* Separador */
 .ev-content hr{
@@ -336,7 +327,6 @@ body{
   border: 1px solid rgba(255,255,255,0.10);
   overflow: auto;
 }
-
 .ev-content pre code{
   padding: 0;
   background: transparent;
@@ -351,14 +341,12 @@ body{
   border-radius: 14px;
   border: 1px solid rgba(255,255,255,0.10);
 }
-
 .ev-content th,
 .ev-content td{
   border: 1px solid rgba(255,255,255,0.10);
   padding: 10px;
   vertical-align: top;
 }
-
 .ev-content th{
   background: rgba(255,255,255,0.08);
   font-weight: 900;
@@ -369,78 +357,7 @@ body{
   color: rgba(111,255,233,0.95);
   text-decoration: underline;
 }
-.ev-content a:hover{
-  opacity: 0.9;
-}
-
-/* =========================
-   E-VANTIS — Secciones en tarjetas
-========================= */
-.ev-sectioned{
-  display: grid;
-  gap: 12px;
-}
-
-.ev-section{
-  border: 1px solid rgba(255,255,255,0.10);
-  background: rgba(255,255,255,0.05);
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.ev-section-h{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-  padding: 12px 14px;
-  border-bottom: 1px solid rgba(255,255,255,0.08);
-  background: rgba(255,255,255,0.04);
-}
-
-.ev-section-t{
-  font-weight: 900;
-  font-size: 14px;
-  letter-spacing: 0.2px;
-}
-
-.ev-section-b{
-  padding: 12px 14px;
-}
-
-/* Ajustes internos para que no “explote” el spacing */
-.ev-section-b > :first-child{ margin-top: 0; }
-.ev-section-b > :last-child{ margin-bottom: 0; }
-
-/* Variantes por tipo */
-.ev-section-core .ev-section-h{
-  border-left: 3px solid rgba(30,203,225,0.55);
-}
-
-.ev-section-dx .ev-section-h{
-  border-left: 3px solid rgba(111,255,233,0.75);
-}
-
-.ev-section-tx .ev-section-h{
-  border-left: 3px solid rgba(244,201,93,0.85);
-}
-
-.ev-section-algo .ev-section-h{
-  border-left: 3px solid rgba(30,203,225,0.85);
-  background: rgba(30,203,225,0.08);
-}
-
-.ev-section-quiz .ev-section-h{
-  border-left: 3px solid rgba(244,201,93,0.95);
-  background: rgba(244,201,93,0.10);
-}
-
-/* H2/H3 ya se usan como separadores: si llegan a colarse, los compactamos */
-.ev-section-b h1,
-.ev-section-b h2,
-.ev-section-b h3{
-  margin: 10px 0 8px;
-}
+.ev-content a:hover{ opacity: 0.9; }
 
 /* =========================
    TOC (tabla de contenidos)
@@ -494,12 +411,16 @@ body{
   border-radius: 12px;
   font-weight: 900;
   cursor: pointer;
+  transition: transform 120ms ease, opacity 120ms ease;
 }
 
-.ev-toc-btn:hover{ transform: translateY(-1px); }
+.ev-toc-btn:hover{
+  transform: translateY(-1px);
+  opacity: 0.95;
+}
 
 /* =========================
-   Secciones colapsables
+   Secciones colapsables (UNA SOLA LÍNEA DORADA UNIVERSAL)
 ========================= */
 .ev-sectioned{
   display: grid;
@@ -507,10 +428,15 @@ body{
 }
 
 .ev-section{
+  position: relative;
   border: 1px solid rgba(255,255,255,0.10);
   background: rgba(255,255,255,0.05);
   border-radius: 16px;
   overflow: hidden;
+
+  /* ✅ Dorado universal (evita doble línea) */
+  border-left: 4px solid var(--cta);
+  padding-left: 12px;
 }
 
 .ev-section details{ width:100%; }
@@ -543,23 +469,32 @@ body{
   padding: 12px 14px;
 }
 
+/* Ajustes internos para spacing */
 .ev-section-b > :first-child{ margin-top: 0; }
 .ev-section-b > :last-child{ margin-bottom: 0; }
 
-/* Variantes por tipo */
-.ev-section-core .ev-section-h{ border-left: 3px solid rgba(30,203,225,0.55); }
-.ev-section-dx .ev-section-h{ border-left: 3px solid rgba(111,255,233,0.75); }
-.ev-section-tx .ev-section-h{ border-left: 3px solid rgba(244,201,93,0.85); }
+/* Compacta headings si llegan dentro */
+.ev-section-b h1,
+.ev-section-b h2,
+.ev-section-b h3{
+  margin: 10px 0 8px;
+}
+
+/* ✅ Variantes por tipo (SIN border-left; el borde dorado ya es universal) */
+.ev-section-core .ev-section-h{ }
+.ev-section-dx .ev-section-h{ }
+.ev-section-tx .ev-section-h{ }
+.ev-section-other .ev-section-h{ }
+
 .ev-section-algo .ev-section-h{
-  border-left: 3px solid rgba(30,203,225,0.85);
   background: rgba(30,203,225,0.08);
 }
+
 .ev-section-quiz .ev-section-h{
-  border-left: 3px solid rgba(244,201,93,0.95);
   background: rgba(244,201,93,0.10);
 }
+
 .ev-section-danger .ev-section-h{
-  border-left: 3px solid rgba(255,140,140,0.75);
   background: rgba(255,140,140,0.10);
 }
 
