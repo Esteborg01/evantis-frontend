@@ -499,7 +499,7 @@ body{
 }
 
 /* =========================
-   Callouts automáticos
+   Callouts automáticos (legacy)
 ========================= */
 .ev-callout{
   border: 1px solid rgba(255,255,255,0.12);
@@ -522,4 +522,115 @@ body{
 .ev-callout-tip{
   border-color: rgba(244,201,93,0.45);
   background: rgba(244,201,93,0.10);
+}
+
+/* =========================
+   FASE 3 — Semántica clínica v1
+   (NO toca .ev-content ni .ev-section base)
+========================= */
+
+/* 1) HIGH-YIELD v1 ==texto== */
+.ev-hy{
+  padding: 2px 6px;
+  border-radius: 8px;
+  background: rgba(244,201,93,0.14);
+  border: 1px solid rgba(244,201,93,0.22);
+  font-weight: 900;
+  color: rgba(255,255,255,0.95);
+  white-space: nowrap;
+}
+
+/* 2) Fila de título + badges dentro del summary */
+.ev-section-title-row{
+  display:flex;
+  flex-direction:column;
+  gap: 6px;
+}
+
+/* contenedor de badges */
+.ev-badges{
+  display:flex;
+  gap: 8px;
+  flex-wrap:wrap;
+}
+
+/* chip base (v1) */
+.ev-badgev1{
+  font-size: 11px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.88);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+
+/* variantes por slug (sutiles, sin saturación) */
+.ev-badgev1-alta_prioridad{
+  border-color: rgba(244,201,93,0.35);
+  background: rgba(244,201,93,0.10);
+}
+
+.ev-badgev1-concepto_clave{
+  border-color: rgba(111,255,233,0.30);
+  background: rgba(111,255,233,0.07);
+}
+
+.ev-badgev1-red_flag{
+  border-color: rgba(255,140,140,0.35);
+  background: rgba(255,140,140,0.09);
+}
+
+.ev-badgev1-error_frecuente{
+  border-color: rgba(255,200,120,0.30);
+  background: rgba(255,200,120,0.08);
+}
+
+.ev-badgev1-enfoque_enarm{
+  border-color: rgba(30,203,225,0.32);
+  background: rgba(30,203,225,0.08);
+  color: rgba(111,255,233,0.95);
+}
+
+/* 3) Callouts v1 explícitos */
+.ev-callout-v1{
+  margin: 12px 0;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  overflow:hidden;
+}
+
+.ev-callout-v1-h{
+  padding: 10px 12px;
+  font-weight: 900;
+  font-size: 12px;
+  border-bottom: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+}
+
+.ev-callout-v1-b{
+  padding: 10px 12px;
+}
+
+/* variantes */
+.ev-callout-v1-perla_clinica{
+  border-color: rgba(111,255,233,0.35);
+  background: rgba(111,255,233,0.06);
+}
+
+.ev-callout-v1-advertencia{
+  border-color: rgba(255,140,140,0.40);
+  background: rgba(255,140,140,0.08);
+}
+
+.ev-callout-v1-punto_de_examen{
+  border-color: rgba(244,201,93,0.40);
+  background: rgba(244,201,93,0.08);
+}
+
+.ev-callout-v1-razonamiento_clinico{
+  border-color: rgba(30,203,225,0.32);
+  background: rgba(30,203,225,0.06);
 }

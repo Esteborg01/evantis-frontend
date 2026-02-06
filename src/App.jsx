@@ -135,8 +135,19 @@ marked.setOptions({
   mangle: false,
 });
 
+function applyHighYield(md = "") {
+  // Convención v1: ==texto==
+  // No cruza saltos de línea. Si algo queda raro, deja literal.
+  const s = String(md || "");
+  return s.replace(/==([^\n=][^=\n]*?)==/g, (full, inner) => {
+    const safe = String(inner || "").trim();
+    if (!safe) return full;
+    return `<span class="ev-hy">${safe}</span>`;
+  });
+}
+
 function renderAcademicHTML(md = "") {
-  const raw = String(md || "");
+  const raw = applyHighYield(String(md || ""));
   const html = marked.parse(raw);
   return DOMPurify.sanitize(html);
 }
@@ -198,13 +209,68 @@ function classifyCallout(text = "") {
  * 2) Mantiene TOC propio (chips).
  * 3) Aplica barra dorada izquierda a secciones “tx” y “quiz” (como en tu screenshot).
  */
+
+/* =========================
+   BADGES v1 (en títulos)
+========================= */
+const BADGE_LABELS = {
+  alta_prioridad: "Alta prioridad clínica",
+  concepto_clave: "Concepto clave",
+  red_flag: "Red flag",
+  error_frecuente: "Error frecuente",
+  enfoque_enarm: "Enfoque ENARM",
+};
+
+function parseLeadingBadges(title = "") {
+  let t = String(title || "").trim();
+  const badges = [];
+
+  // Máximo 2 badges al inicio
+  for (let i = 0; i < 2; i++) {
+    const m = t.match(/^\[badge:([a-z_]+)\]\s*/i);
+    if (!m) break;
+    const slug = (m[1] || "").toLowerCase();
+    if (BADGE_LABELS[slug]) badges.push(slug);
+    t = t.slice(m[0].length);
+  }
+
+  return { cleanTitle: t.trim() || "Sección", badges };
+}
+
+/* =========================
+   CALLOUTS v1 (blockquote con etiqueta)
+   Convención:
+   > [callout:slug]
+   > contenido...
+========================= */
+const CALLOUT_LABELS = {
+  perla_clinica: "Perla clínica",
+  advertencia: "Advertencia",
+  punto_de_examen: "Punto de examen",
+  razonamiento_clinico: "Razonamiento clínico",
+};
+
+function parseCalloutSlugFromBlockquote(blockquoteEl) {
+  // marked suele renderizar:
+  // <blockquote><p>[callout:slug]</p><p>...</p></blockquote>
+  // OJO: firstChild puede ser TextNode; usamos firstElementChild.
+  const firstEl = blockquoteEl?.firstElementChild; // casi siempre <p>
+  const firstText = (firstEl?.textContent || "").trim();
+
+  // Espera exactamente: [callout:slug]
+  const m = firstText.match(/^\[callout:([a-z_]+)\]\s*$/i);
+  if (!m) return "";
+  const slug = (m[1] || "").toLowerCase();
+  return CALLOUT_LABELS[slug] ? slug : "";
+}
+
 function buildSectionedHTML(md = "") {
   const sanitized = renderAcademicHTML(md);
   const doc = new DOMParser().parseFromString(sanitized, "text/html");
   const body = doc.body;
 
   const sections = [];
-  let current = { title: "Introducción", kind: "other", nodes: [] };
+  let current = { title: "Introducción", badges: [], kind: "other", nodes: [] };
 
   // Si entramos a “Contenido/Índice”, ignoramos todos los nodos hasta el siguiente h2/h3
   let skipMode = false;
@@ -235,17 +301,18 @@ function buildSectionedHTML(md = "") {
     if (tag === "h2" || tag === "h3") {
       flush();
 
-      const title = (el.textContent || "").trim() || "Sección";
+      const rawTitle = (el.textContent || "").trim() || "Sección";
+      const { cleanTitle: title, badges } = parseLeadingBadges(rawTitle);
 
       // No renderizar secciones “Contenido/Índice” (y omitir su contenido)
       if (isSkippableHeading(title)) {
         skipMode = true;
-        current = { title: "", kind: "other", nodes: [] };
+        current = { title: "", badges: [], kind: "other", nodes: [] };
         return;
       }
 
       skipMode = false;
-      current = { title, kind: sectionKind(title), nodes: [] };
+      current = { title, badges, kind: sectionKind(title), nodes: [] };
       return;
     }
 
@@ -287,7 +354,7 @@ function buildSectionedHTML(md = "") {
 
   const tocActions = doc.createElement("div");
   tocActions.setAttribute("class", "ev-toc-actions");
-  // Nota: esto es HTML “estático”; no usa React events, pero funciona como en tu versión.
+  // Nota: esto es HTML “estático”; no usa React events.
   tocActions.innerHTML = `
     <button class="ev-toc-btn" type="button" onclick="
       document.querySelectorAll('.ev-section details').forEach(d=>d.open=true);
@@ -330,30 +397,75 @@ function buildSectionedHTML(md = "") {
     h.setAttribute("class", "ev-section-t");
     h.textContent = s.title;
 
+    // NEW: fila título + badges
+    const titleRow = doc.createElement("div");
+    titleRow.setAttribute("class", "ev-section-title-row");
+
+    // badges (si existen)
+    if (Array.isArray(s.badges) && s.badges.length) {
+      const badgeWrap = doc.createElement("div");
+      badgeWrap.setAttribute("class", "ev-badges");
+
+      s.badges.forEach((slug) => {
+        const chip = doc.createElement("span");
+        chip.setAttribute("class", `ev-badgev1 ev-badgev1-${slug}`);
+        chip.textContent = BADGE_LABELS[slug] || slug;
+        badgeWrap.appendChild(chip);
+      });
+
+      titleRow.appendChild(badgeWrap);
+    }
+
+    titleRow.appendChild(h);
+
     const hint = doc.createElement("div");
     hint.setAttribute("class", "ev-section-hint");
     hint.textContent = "Click para plegar/abrir";
 
-    summary.appendChild(h);
+    summary.appendChild(titleRow);
     summary.appendChild(hint);
 
     const content = doc.createElement("div");
     content.setAttribute("class", "ev-section-b");
 
-    // Callouts automáticos
     s.nodes.forEach((n) => {
       const tag = n?.tagName?.toLowerCase?.() || "";
-      if (tag === "p") {
-        const txt = (n.textContent || "").trim();
-        const k = classifyCallout(txt);
-        if (k) {
+
+      // 1) Detectar callout v1
+      if (tag === "blockquote") {
+        const slug = parseCalloutSlugFromBlockquote(n);
+        if (slug) {
+          // construir caja
           const box = doc.createElement("div");
-          box.setAttribute("class", `ev-callout ev-callout-${k}`);
-          box.textContent = txt;
+          box.setAttribute("class", `ev-callout ev-callout-v1 ev-callout-v1-${slug}`);
+
+          // ✅ FIX: clases correctas para CSS v1
+          const head = doc.createElement("div");
+          head.setAttribute("class", "ev-callout-v1-h");
+          head.textContent = CALLOUT_LABELS[slug];
+
+          const bodyEl = doc.createElement("div");
+          bodyEl.setAttribute("class", "ev-callout-v1-b");
+
+          // Clonar contenido del blockquote y remover el primer bloque (<p>[callout:slug]</p>)
+          const clone = n.cloneNode(true);
+
+          // ✅ FIX: remover primer ELEMENT (no firstChild) para evitar TextNodes
+          const firstEl = clone?.firstElementChild;
+          if (firstEl) clone.removeChild(firstEl);
+
+          // Mover hijos restantes al body
+          Array.from(clone.childNodes).forEach((ch) => bodyEl.appendChild(ch));
+
+          box.appendChild(head);
+          box.appendChild(bodyEl);
+
           content.appendChild(box);
           return;
         }
       }
+
+      // 2) Si no es callout v1, se renderiza normal
       content.appendChild(n);
     });
 
