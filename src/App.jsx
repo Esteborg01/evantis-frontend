@@ -243,6 +243,242 @@ function buildSectionedHTML(md = "") {
   return wrap.innerHTML;
 }
 
+function slugify(s = "") {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+function normalizeSectionTitle(s = "") {
+  return String(s || "").trim().replace(/[:：]\s*$/, "").toLowerCase();
+}
+
+function sectionKind(title = "") {
+  const t = normalizeSectionTitle(title);
+
+  if (t.includes("definicion")) return "core";
+  if (t.includes("epidemiologia")) return "core";
+  if (t.includes("cuadro clinico")) return "core";
+  if (t.includes("signos") || t.includes("sintomas")) return "core";
+
+  if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
+  if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
+
+  if (t.includes("algoritmo")) return "algo";
+  if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
+
+  if (t.includes("red flags") || t.includes("banderas rojas")) return "danger";
+  return "other";
+}
+
+function classifyCallout(text = "") {
+  const t = String(text || "").trim();
+
+  // Detectores simples (puedes expandirlos luego)
+  if (/^(red\s*flags|banderas\s*rojas)\b/i.test(t)) return "danger";
+  if (/^(criterios|criterio|señales\s*de\s*alarma)\b/i.test(t)) return "info";
+  if (/^(perlas|tip|tips|puntos\s*clave|high[-\s]*yield)\b/i.test(t)) return "tip";
+  if (/^(urgente|emergencia|intervencion\s*inmediata)\b/i.test(t)) return "danger";
+  return "";
+}
+
+/**
+ * Markdown -> HTML (marked) -> sanitize (DOMPurify)
+ * Luego: secciones por h2/h3 + TOC + <details open> colapsable + callouts.
+ */
+function slugify(s = "") {
+  return String(s || "")
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^\w\s-]/g, "")
+    .trim()
+    .replace(/\s+/g, "-")
+    .slice(0, 80);
+}
+
+function normalizeSectionTitle(s = "") {
+  return String(s || "").trim().replace(/[:：]\s*$/, "").toLowerCase();
+}
+
+function sectionKind(title = "") {
+  const t = normalizeSectionTitle(title);
+
+  if (t.includes("definicion")) return "core";
+  if (t.includes("epidemiologia")) return "core";
+  if (t.includes("cuadro clinico")) return "core";
+  if (t.includes("signos") || t.includes("sintomas")) return "core";
+
+  if (t.includes("diagnostico") || t.includes("tamizaje") || t.includes("estandar de oro")) return "dx";
+  if (t.includes("tratamiento") || t.includes("terapia") || t.includes("manejo")) return "tx";
+
+  if (t.includes("algoritmo")) return "algo";
+  if (t.includes("preguntas de repaso") || t.includes("repaso")) return "quiz";
+
+  if (t.includes("red flags") || t.includes("banderas rojas")) return "danger";
+  return "other";
+}
+
+function classifyCallout(text = "") {
+  const t = String(text || "").trim();
+
+  // Detectores simples (puedes expandirlos luego)
+  if (/^(red\s*flags|banderas\s*rojas)\b/i.test(t)) return "danger";
+  if (/^(criterios|criterio|señales\s*de\s*alarma)\b/i.test(t)) return "info";
+  if (/^(perlas|tip|tips|puntos\s*clave|high[-\s]*yield)\b/i.test(t)) return "tip";
+  if (/^(urgente|emergencia|intervencion\s*inmediata)\b/i.test(t)) return "danger";
+  return "";
+}
+
+/**
+ * Markdown -> HTML (marked) -> sanitize (DOMPurify)
+ * Luego: secciones por h2/h3 + TOC + <details open> colapsable + callouts.
+ */
+function buildSectionedHTML(md = "") {
+  const sanitized = renderAcademicHTML(md);
+  const doc = new DOMParser().parseFromString(sanitized, "text/html");
+  const body = doc.body;
+
+  const sections = [];
+  let current = { title: "Contenido", kind: "other", nodes: [] };
+
+  const flush = () => {
+    const hasContent = current.nodes.some((n) => {
+      const tag = n?.tagName?.toLowerCase?.() || "";
+      const txt = (n.textContent || "").trim();
+      return txt.length > 0 || tag === "ul" || tag === "ol" || tag === "table" || tag === "pre";
+    });
+    if (hasContent) sections.push(current);
+  };
+
+  Array.from(body.childNodes).forEach((node) => {
+    const el = node.nodeType === 1 ? node : null;
+    const tag = el?.tagName?.toLowerCase?.() || "";
+
+    // Sección nueva en h2/h3
+    if (tag === "h2" || tag === "h3") {
+      flush();
+      const title = (el.textContent || "").trim() || "Sección";
+      current = { title, kind: sectionKind(title), nodes: [] };
+      return;
+    }
+
+    // Texto suelto -> párrafo
+    if (node.nodeType === 3) {
+      const txt = (node.textContent || "").trim();
+      if (txt) {
+        const p = doc.createElement("p");
+        p.textContent = txt;
+        current.nodes.push(p);
+      }
+      return;
+    }
+
+    if (el) current.nodes.push(el);
+  });
+
+  flush();
+
+  // Wrapper final
+  const wrap = doc.createElement("div");
+  wrap.setAttribute("class", "ev-sectioned");
+
+  // TOC
+  const toc = doc.createElement("div");
+  toc.setAttribute("class", "ev-toc");
+
+  const tocTitle = doc.createElement("div");
+  tocTitle.setAttribute("class", "ev-toc-t");
+  tocTitle.textContent = "Contenido";
+  toc.appendChild(tocTitle);
+
+  const tocList = doc.createElement("div");
+  tocList.setAttribute("class", "ev-toc-l");
+  toc.appendChild(tocList);
+
+  // Botones TOC (expand/contraer todo)
+  const tocActions = doc.createElement("div");
+  tocActions.setAttribute("class", "ev-toc-actions");
+  tocActions.innerHTML = `
+    <button class="ev-toc-btn" type="button" onclick="
+      document.querySelectorAll('.ev-section details').forEach(d=>d.open=true);
+    ">Expandir todo</button>
+    <button class="ev-toc-btn" type="button" onclick="
+      document.querySelectorAll('.ev-section details').forEach(d=>d.open=false);
+    ">Contraer todo</button>
+  `;
+  toc.appendChild(tocActions);
+
+  wrap.appendChild(toc);
+
+  // Secciones -> <details>
+  sections.forEach((s, idx) => {
+    const id = `sec-${idx + 1}-${slugify(s.title)}`;
+
+    // Link en TOC
+    const a = doc.createElement("a");
+    a.setAttribute("href", `#${id}`);
+    a.setAttribute("class", "ev-toc-a");
+    a.textContent = s.title;
+    tocList.appendChild(a);
+
+    // Card section
+    const card = doc.createElement("section");
+    card.setAttribute("class", `ev-section ev-section-${s.kind}`);
+    card.setAttribute("id", id);
+
+    const details = doc.createElement("details");
+    details.setAttribute("open", "open");
+
+    const summary = doc.createElement("summary");
+    summary.setAttribute("class", "ev-section-h");
+
+    const h = doc.createElement("div");
+    h.setAttribute("class", "ev-section-t");
+    h.textContent = s.title;
+
+    const hint = doc.createElement("div");
+    hint.setAttribute("class", "ev-section-hint");
+    hint.textContent = "Click para plegar/abrir";
+
+    summary.appendChild(h);
+    summary.appendChild(hint);
+
+    const content = doc.createElement("div");
+    content.setAttribute("class", "ev-section-b");
+
+    // Callouts automáticos: si un <p> inicia con keyword, lo convertimos a caja
+    s.nodes.forEach((n) => {
+      const tag = n?.tagName?.toLowerCase?.() || "";
+      if (tag === "p") {
+        const txt = (n.textContent || "").trim();
+        const k = classifyCallout(txt);
+        if (k) {
+          const box = doc.createElement("div");
+          box.setAttribute("class", `ev-callout ev-callout-${k}`);
+          box.textContent = txt;
+          content.appendChild(box);
+          return;
+        }
+      }
+      content.appendChild(n);
+    });
+
+    details.appendChild(summary);
+    details.appendChild(content);
+    card.appendChild(details);
+
+    wrap.appendChild(card);
+  });
+
+  return wrap.innerHTML;
+}
+
 /* =========================
    BANNER (alerts)
    (quitamos “OK:” y “Estado: sesión…”, dejamos solo error

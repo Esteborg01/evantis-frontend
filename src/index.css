@@ -441,3 +441,150 @@ body{
 .ev-section-b h3{
   margin: 10px 0 8px;
 }
+
+/* =========================
+   TOC (tabla de contenidos)
+========================= */
+.ev-toc{
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  padding: 12px 14px;
+}
+
+.ev-toc-t{
+  font-weight: 900;
+  margin-bottom: 8px;
+}
+
+.ev-toc-l{
+  display:flex;
+  flex-wrap:wrap;
+  gap: 8px 10px;
+}
+
+.ev-toc-a{
+  display:inline-flex;
+  align-items:center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.04);
+  color: rgba(111,255,233,0.95);
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.ev-toc-a:hover{ opacity: 0.9; }
+
+.ev-toc-actions{
+  margin-top: 10px;
+  display:flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.ev-toc-btn{
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.06);
+  color: var(--text);
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.ev-toc-btn:hover{ transform: translateY(-1px); }
+
+/* =========================
+   Secciones colapsables
+========================= */
+.ev-sectioned{
+  display: grid;
+  gap: 12px;
+}
+
+.ev-section{
+  border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.05);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.ev-section details{ width:100%; }
+.ev-section summary{ list-style:none; }
+.ev-section summary::-webkit-details-marker{ display:none; }
+
+.ev-section-h{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04);
+  cursor: pointer;
+}
+
+.ev-section-t{
+  font-weight: 900;
+  font-size: 14px;
+  letter-spacing: 0.2px;
+}
+
+.ev-section-hint{
+  font-size: 12px;
+  color: rgba(184,193,204,0.9);
+}
+
+.ev-section-b{
+  padding: 12px 14px;
+}
+
+.ev-section-b > :first-child{ margin-top: 0; }
+.ev-section-b > :last-child{ margin-bottom: 0; }
+
+/* Variantes por tipo */
+.ev-section-core .ev-section-h{ border-left: 3px solid rgba(30,203,225,0.55); }
+.ev-section-dx .ev-section-h{ border-left: 3px solid rgba(111,255,233,0.75); }
+.ev-section-tx .ev-section-h{ border-left: 3px solid rgba(244,201,93,0.85); }
+.ev-section-algo .ev-section-h{
+  border-left: 3px solid rgba(30,203,225,0.85);
+  background: rgba(30,203,225,0.08);
+}
+.ev-section-quiz .ev-section-h{
+  border-left: 3px solid rgba(244,201,93,0.95);
+  background: rgba(244,201,93,0.10);
+}
+.ev-section-danger .ev-section-h{
+  border-left: 3px solid rgba(255,140,140,0.75);
+  background: rgba(255,140,140,0.10);
+}
+
+/* =========================
+   Callouts automáticos
+========================= */
+.ev-callout{
+  border: 1px solid rgba(255,255,255,0.12);
+  border-radius: 14px;
+  padding: 10px 12px;
+  margin: 10px 0;
+  background: rgba(255,255,255,0.05);
+}
+
+.ev-callout-danger{
+  border-color: rgba(255,140,140,0.45);
+  background: rgba(255,140,140,0.10);
+}
+
+.ev-callout-info{
+  border-color: rgba(111,255,233,0.40);
+  background: rgba(111,255,233,0.08);
+}
+
+.ev-callout-tip{
+  border-color: rgba(244,201,93,0.45);
+  background: rgba(244,201,93,0.10);
+}
