@@ -842,21 +842,23 @@ export default function App() {
   // =========================
   // ACTIONS
   // =========================
-  async function handleRegister() {
+  async function handleLogin() {
     setError("");
     setNotice("");
 
     try {
-      const res = await fetch(`${API_BASE}${AUTH_REGISTER_PATH}`, {
+      const body = new URLSearchParams();
+      body.set("grant_type", "password");
+      body.set("username", email);
+      body.set("password", password);
+
+      const res = await fetch(`${API_BASE}${AUTH_LOGIN_PATH}`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/json",
+          "Content-Type": "application/x-www-form-urlencoded",
           ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
         },
-        body: JSON.stringify({
-          email: (email || "").trim(),
-          password: password || "",
-        }),
+        body: body.toString(),
       });
 
       const rawText = await res.text();
@@ -869,24 +871,25 @@ export default function App() {
 
       if (!res.ok) {
         const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
-        throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
+
+        // NUEVO: email no verificado
+        if (res.status === 403 && /no verificado|verifica/i.test(detail)) {
+          // Si backend manda link / token en detail, lo mostramos tal cual.
+          setError(detail);
+          setNotice("Revisa tu correo. Si abriste el link de verificación, vuelve aquí e intenta login.");
+          return;
+        }
+
+        throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
       }
 
-      // ✅ NUEVO FLUJO: con verificación de correo, el backend puede NO devolver access_token
-      // Así que NO asumimos sesión iniciada.
-      const msg =
-        data?.message ||
-        "Cuenta creada correctamente. Revisa tu correo para verificar tu cuenta antes de iniciar sesión.";
+      const tkn = data?.access_token || "";
+      if (!tkn) throw new Error("Login OK, pero no se recibió access_token.");
 
-      setNotice(msg);
-      setError("");
-      setAuthMode("login");
-
-      // Opcional: limpiar password para UX
-      // setPassword("");
+      setToken(tkn);
+      setNotice("Sesión iniciada.");
     } catch (e) {
-      setError(e?.message || "Error de registro.");
-      setNotice("");
+      setError(e?.message || "Error de login.");
     }
   }
 
@@ -908,24 +911,45 @@ export default function App() {
       });
 
       const rawText = await res.text();
-      let data;
+
+      // Intentar parsear JSON; si no, dejar el texto
+      let data = null;
       try {
-        data = JSON.parse(rawText);
+        data = rawText ? JSON.parse(rawText) : null;
       } catch {
-        data = { detail: rawText };
+        data = null;
       }
 
       if (!res.ok) {
-        const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+        const detailRaw = data?.detail ?? data?.message ?? rawText ?? `HTTP ${res.status}`;
+        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
         throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
       }
 
-      const tkn = data?.access_token || "";
-      if (!tkn) throw new Error("Registro OK, pero no se recibió access_token.");
+      // ✅ Caso A: backend sí regresa token (modo antiguo o sin verificación)
+      const tkn = (data?.access_token || "").trim();
+      if (tkn) {
+        setToken(tkn);
+        setNotice("Cuenta creada. Sesión iniciada.");
+        setAuthMode("login");
+        return;
+      }
 
-      setToken(tkn);
-      setNotice("Cuenta creada. Sesión iniciada.");
+      // ✅ Caso B: backend NO regresa token (flujo nuevo: verificar email)
+      // Tomamos un mensaje útil si viene en payload.
+      const msgRaw =
+        data?.message ||
+        data?.detail ||
+        "Cuenta creada. Revisa tu correo para verificar tu cuenta y después inicia sesión.";
+
+      const msg = typeof msgRaw === "string" ? msgRaw : JSON.stringify(msgRaw);
+
+      setNotice(msg);
       setAuthMode("login");
+
+      // Opcional UX: dejar el password vacío (evita reintentos con password visible)
+      // setPassword("");
+
     } catch (e) {
       setError(e?.message || "Error de registro.");
     }
