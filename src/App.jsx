@@ -842,23 +842,21 @@ export default function App() {
   // =========================
   // ACTIONS
   // =========================
-  async function handleLogin() {
+  async function handleRegister() {
     setError("");
     setNotice("");
 
     try {
-      const body = new URLSearchParams();
-      body.set("grant_type", "password");
-      body.set("username", email);
-      body.set("password", password);
-
-      const res = await fetch(`${API_BASE}${AUTH_LOGIN_PATH}`, {
+      const res = await fetch(`${API_BASE}${AUTH_REGISTER_PATH}`, {
         method: "POST",
         headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
+          "Content-Type": "application/json",
           ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
         },
-        body: body.toString(),
+        body: JSON.stringify({
+          email: (email || "").trim(),
+          password: password || "",
+        }),
       });
 
       const rawText = await res.text();
@@ -871,25 +869,24 @@ export default function App() {
 
       if (!res.ok) {
         const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
-
-        // NUEVO: email no verificado
-        if (res.status === 403 && /no verificado|verifica/i.test(detail)) {
-          // Si backend manda link / token en detail, lo mostramos tal cual.
-          setError(detail);
-          setNotice("Revisa tu correo. Si abriste el link de verificación, vuelve aquí e intenta login.");
-          return;
-        }
-
-        throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
+        throw new Error(`Registro falló (HTTP ${res.status}). ${detail}`);
       }
 
-      const tkn = data?.access_token || "";
-      if (!tkn) throw new Error("Login OK, pero no se recibió access_token.");
+      // ✅ NUEVO FLUJO: con verificación de correo, el backend puede NO devolver access_token
+      // Así que NO asumimos sesión iniciada.
+      const msg =
+        data?.message ||
+        "Cuenta creada correctamente. Revisa tu correo para verificar tu cuenta antes de iniciar sesión.";
 
-      setToken(tkn);
-      setNotice("Sesión iniciada.");
+      setNotice(msg);
+      setError("");
+      setAuthMode("login");
+
+      // Opcional: limpiar password para UX
+      // setPassword("");
     } catch (e) {
-      setError(e?.message || "Error de login.");
+      setError(e?.message || "Error de registro.");
+      setNotice("");
     }
   }
 
