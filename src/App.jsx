@@ -16,6 +16,9 @@ const AUTH_ME_PATH = "/auth/me";
 const TEACH_CURRICULUM_PATH = "/teach/curriculum";
 const SHOW_DEBUG_PILLS = false;
 
+// Paleta E-Vantis (para usos inline puntuales)
+const EV_GOLD = "#F4C95D"; // dorado suave CTA
+
 /* =========================
    STORAGE KEYS
 ========================= */
@@ -189,6 +192,11 @@ function classifyCallout(text = "") {
 /**
  * Markdown -> HTML (marked) -> sanitize (DOMPurify)
  * Luego: secciones por h2/h3 + TOC + <details open> colapsable + callouts.
+ *
+ * FIXES incluidos:
+ * 1) Elimina secciones duplicadas “Contenido” / “Índice” (no crea sección y omite su contenido).
+ * 2) Mantiene TOC propio (chips).
+ * 3) Aplica barra dorada izquierda a secciones “tx” y “quiz” (como en tu screenshot).
  */
 function buildSectionedHTML(md = "") {
   const sanitized = renderAcademicHTML(md);
@@ -196,14 +204,26 @@ function buildSectionedHTML(md = "") {
   const body = doc.body;
 
   const sections = [];
-  let current = { title: "Contenido", kind: "other", nodes: [] };
+  let current = { title: "Introducción", kind: "other", nodes: [] };
+
+  // Si entramos a “Contenido/Índice”, ignoramos todos los nodos hasta el siguiente h2/h3
+  let skipMode = false;
+
+  const isSkippableHeading = (title = "") => {
+    const t = normalizeSectionTitle(title);
+    // “indice” sin tilde ya queda así; por si llega con tilde, lo cubrimos por robustez
+    return t === "contenido" || t === "indice" || t === "índice";
+  };
 
   const flush = () => {
+    if (skipMode) return;
+
     const hasContent = current.nodes.some((n) => {
       const tag = n?.tagName?.toLowerCase?.() || "";
       const txt = (n.textContent || "").trim();
       return txt.length > 0 || tag === "ul" || tag === "ol" || tag === "table" || tag === "pre";
     });
+
     if (hasContent) sections.push(current);
   };
 
@@ -214,10 +234,23 @@ function buildSectionedHTML(md = "") {
     // Sección nueva en h2/h3
     if (tag === "h2" || tag === "h3") {
       flush();
+
       const title = (el.textContent || "").trim() || "Sección";
+
+      // No renderizar secciones “Contenido/Índice” (y omitir su contenido)
+      if (isSkippableHeading(title)) {
+        skipMode = true;
+        current = { title: "", kind: "other", nodes: [] };
+        return;
+      }
+
+      skipMode = false;
       current = { title, kind: sectionKind(title), nodes: [] };
       return;
     }
+
+    // Si estamos omitiendo “Contenido/Índice”, ignoramos nodos
+    if (skipMode) return;
 
     // Texto suelto -> párrafo
     if (node.nodeType === 3) {
@@ -282,6 +315,10 @@ function buildSectionedHTML(md = "") {
     const card = doc.createElement("section");
     card.setAttribute("class", `ev-section ev-section-${s.kind}`);
     card.setAttribute("id", id);
+
+    // ✅ Barra dorada izquierda para TODAS las secciones
+    card.style.borderLeft = `4px solid ${EV_GOLD}`;
+    card.style.paddingLeft = "10px";
 
     const details = doc.createElement("details");
     details.setAttribute("open", "open");
@@ -473,7 +510,6 @@ export default function App() {
   // DERIVED TOPICS
   // =========================
   const selectedSubject = useMemo(() => subjects.find((s) => s.id === subjectId) || null, [subjects, subjectId]);
-
   const blocks = useMemo(() => selectedSubject?.blocks || [], [selectedSubject]);
 
   const flatTopics = useMemo(() => {
@@ -1277,7 +1313,9 @@ export default function App() {
               <button className="ev-btn ev-btn-primary" onClick={authMode === "register" ? handleRegister : handleLogin}>
                 {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
               </button>
-              <div className="ev-muted" style={{ fontSize: 12 }}>Al continuar aceptas uso académico. No sustituye juicio clínico.</div>
+              <div className="ev-muted" style={{ fontSize: 12 }}>
+                Al continuar aceptas uso académico. No sustituye juicio clínico.
+              </div>
             </div>
           </div>
         </div>
@@ -1308,7 +1346,9 @@ export default function App() {
             Plan: <b>{me?.plan || "—"}</b>
           </span>
           {hasPro ? <span className="ev-badge ev-badge-accent">Pro/Premium</span> : <span className="ev-badge">Free</span>}
-          <button className="ev-btn" onClick={handleLogout}>Logout</button>
+          <button className="ev-btn" onClick={handleLogout}>
+            Logout
+          </button>
         </div>
       </div>
 
@@ -1325,8 +1365,12 @@ export default function App() {
 
             {SHOW_DEBUG_PILLS ? (
               <div className="ev-row">
-                <span className="ev-pill">API: <b>{API_BASE}</b></span>
-                <span className="ev-pill">Curriculum: <b>embebido</b></span>
+                <span className="ev-pill">
+                  API: <b>{API_BASE}</b>
+                </span>
+                <span className="ev-pill">
+                  Curriculum: <b>embebido</b>
+                </span>
               </div>
             ) : null}
           </div>
@@ -1343,9 +1387,7 @@ export default function App() {
               <div className="ev-card-t">Crear contenido</div>
               <div className="ev-card-d">Selecciona Materia → Tema → Subtema y el Módulo.</div>
             </div>
-            <span className="ev-badge">
-              {selectedSubject?.npm_profile ? `Perfil: ${selectedSubject.npm_profile}` : "Perfil: —"}
-            </span>
+            <span className="ev-badge">{selectedSubject?.npm_profile ? `Perfil: ${selectedSubject.npm_profile}` : "Perfil: —"}</span>
           </div>
 
           <div className="ev-card-b">
@@ -1354,7 +1396,9 @@ export default function App() {
               <select className="ev-select" value={subjectId} onChange={(e) => setSubjectId(e.target.value)}>
                 <option value="">— Selecciona —</option>
                 {subjects.map((s) => (
-                  <option key={s.id} value={s.id}>{s.name}</option>
+                  <option key={s.id} value={s.id}>
+                    {s.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1365,9 +1409,13 @@ export default function App() {
                 <option value="">— Selecciona —</option>
                 {blocks.map((b) => (
                   <React.Fragment key={b.id}>
-                    <option value="" disabled>— {b.name} —</option>
+                    <option value="" disabled>
+                      — {b.name} —
+                    </option>
                     {(b.macro_topics || []).map((t) => (
-                      <option key={t.id} value={t.id}>{t.name}</option>
+                      <option key={t.id} value={t.id}>
+                        {t.name}
+                      </option>
                     ))}
                   </React.Fragment>
                 ))}
@@ -1382,11 +1430,11 @@ export default function App() {
                 onChange={(e) => setSubtopicId(e.target.value)}
                 disabled={!selectedTopic || !(selectedTopic.subtopics?.length > 0)}
               >
-                <option value="">
-                  {selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}
-                </option>
+                <option value="">{selectedTopic?.subtopics?.length > 0 ? "— Selecciona —" : "— (Sin subtemas) —"}</option>
                 {(selectedTopic?.subtopics || []).map((st) => (
-                  <option key={st.id} value={st.id}>{st.name}</option>
+                  <option key={st.id} value={st.id}>
+                    {st.name}
+                  </option>
                 ))}
               </select>
             </div>
@@ -1395,11 +1443,15 @@ export default function App() {
               <label className="ev-label">Qué quieres generar</label>
               <select className="ev-select" value={module} onChange={(e) => setModule(e.target.value)}>
                 {moduleOptions.map((m) => (
-                  <option key={m} value={m}>{humanLabelModule(m)}</option>
+                  <option key={m} value={m}>
+                    {humanLabelModule(m)}
+                  </option>
                 ))}
               </select>
               {!hasPro && moduleOptions.includes("gpc_summary") === false && (
-                <div className="ev-muted" style={{ fontSize: 12 }}>Resumen GPC requiere Pro/Premium.</div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Resumen GPC requiere Pro/Premium.
+                </div>
               )}
             </div>
 
@@ -1416,14 +1468,7 @@ export default function App() {
               <div style={{ flex: 1 }}>
                 <div className="ev-field">
                   <label className="ev-label">Duración (min)</label>
-                  <input
-                    className="ev-input"
-                    type="number"
-                    value={durationMinutes}
-                    onChange={(e) => setDurationMinutes(e.target.value)}
-                    min={5}
-                    max={120}
-                  />
+                  <input className="ev-input" type="number" value={durationMinutes} onChange={(e) => setDurationMinutes(e.target.value)} min={5} max={120} />
                 </div>
               </div>
 
@@ -1465,12 +1510,7 @@ export default function App() {
             {advancedOpen && (
               <div className="ev-alert" style={{ marginTop: 8 }}>
                 <label className="ev-row" style={{ gap: 10, marginBottom: 8 }}>
-                  <input
-                    type="checkbox"
-                    checked={useGuides}
-                    onChange={(e) => setUseGuides(e.target.checked)}
-                    disabled={module === "gpc_summary"}
-                  />
+                  <input type="checkbox" checked={useGuides} onChange={(e) => setUseGuides(e.target.checked)} disabled={module === "gpc_summary"} />
                   <span style={{ fontSize: 13 }}>Usar guías actualizadas (requerido para Resumen GPC)</span>
                 </label>
 
@@ -1481,18 +1521,12 @@ export default function App() {
               </div>
             )}
 
-            <button
-              className="ev-btn ev-btn-primary"
-              onClick={handleGenerate}
-              disabled={isGenerating || quotaBlocked}
-              style={{ width: "100%", marginTop: 10 }}
-            >
+            <button className="ev-btn ev-btn-primary" onClick={handleGenerate} disabled={isGenerating || quotaBlocked} style={{ width: "100%", marginTop: 10 }}>
               {quotaBlocked ? "Cuota mensual alcanzada" : isGenerating ? "Generando…" : "Generar"}
             </button>
 
             <div className="ev-muted" style={{ fontSize: 12, marginTop: 10 }}>
-              Se enviará: <b>{selectedSubject?.name || "Materia"}</b> → <b>{selectedTopic?.name || "Tema"}</b> →{" "}
-              <b>{humanLabelModule(module)}</b>
+              Se enviará: <b>{selectedSubject?.name || "Materia"}</b> → <b>{selectedTopic?.name || "Tema"}</b> → <b>{humanLabelModule(module)}</b>
             </div>
           </div>
         </div>
@@ -1507,7 +1541,9 @@ export default function App() {
               </div>
 
               <div className="ev-row">
-                <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>Guardar</button>
+                <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>
+                  Guardar
+                </button>
                 <button className="ev-btn ev-btn-cta" onClick={handleDownloadPDFInstitutional} disabled={!hasPro || !result}>
                   PDF (Pro/Premium)
                 </button>
@@ -1520,16 +1556,11 @@ export default function App() {
                   <div style={{ fontSize: 16, fontWeight: 900 }}>{result.title}</div>
 
                   <div className="ev-muted" style={{ fontSize: 12, marginTop: 6 }}>
-                    <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} • <b>Módulo:</b>{" "}
-                    {humanLabelModule(result.module)} • <b>Profundidad:</b> {humanLabelLevel(result.level)} •{" "}
-                    <b>Duración:</b> {result.duration_minutes} min
+                    <b>Materia:</b> {result.subject_name} • <b>Tema:</b> {result.topic_name} • <b>Módulo:</b> {humanLabelModule(result.module)} •{" "}
+                    <b>Profundidad:</b> {humanLabelLevel(result.level)} • <b>Duración:</b> {result.duration_minutes} min
                   </div>
 
-                  <div
-                    className="ev-content"
-                    style={{ marginTop: 12 }}
-                    dangerouslySetInnerHTML={{ __html: buildSectionedHTML(result.lesson || "") }}
-                  />
+                  <div className="ev-content" style={{ marginTop: 12 }} dangerouslySetInnerHTML={{ __html: buildSectionedHTML(result.lesson || "") }} />
 
                   {/* CHAT */}
                   <div className="ev-card" style={{ marginTop: 12 }}>
@@ -1545,13 +1576,11 @@ export default function App() {
 
                     {chatOpen && (
                       <div className="ev-card-b">
-                        <div
-                          ref={chatBoxRef}
-                          className="ev-card"
-                          style={{ padding: 12, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.10)" }}
-                        >
+                        <div ref={chatBoxRef} className="ev-card" style={{ padding: 12, maxHeight: 280, overflow: "auto", background: "rgba(0,0,0,0.10)" }}>
                           {chatMessages.length === 0 ? (
-                            <div className="ev-muted" style={{ fontSize: 12 }}>No hay mensajes aún. Escribe tu primera duda.</div>
+                            <div className="ev-muted" style={{ fontSize: 12 }}>
+                              No hay mensajes aún. Escribe tu primera duda.
+                            </div>
                           ) : (
                             chatMessages.map((m, idx) => {
                               const isUser = m.role === "user";
@@ -1565,11 +1594,7 @@ export default function App() {
                                   {isUser ? (
                                     <div style={{ whiteSpace: "pre-wrap", fontSize: 13, lineHeight: 1.4 }}>{content}</div>
                                   ) : (
-                                    <div
-                                      className="ev-content"
-                                      style={{ marginTop: 6 }}
-                                      dangerouslySetInnerHTML={{ __html: renderAcademicHTML(content) }}
-                                    />
+                                    <div className="ev-content" style={{ marginTop: 6 }} dangerouslySetInnerHTML={{ __html: renderAcademicHTML(content) }} />
                                   )}
                                 </div>
                               );
@@ -1599,14 +1624,18 @@ export default function App() {
                         </div>
 
                         {chatStatus && (
-                          <div className="ev-muted" style={{ marginTop: 8, fontSize: 12 }}>{chatStatus}</div>
+                          <div className="ev-muted" style={{ marginTop: 8, fontSize: 12 }}>
+                            {chatStatus}
+                          </div>
                         )}
                       </div>
                     )}
                   </div>
                 </>
               ) : (
-                <div className="ev-muted" style={{ fontSize: 12 }}>Genera una clase/examen/caso para ver el contenido aquí.</div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Genera una clase/examen/caso para ver el contenido aquí.
+                </div>
               )}
             </div>
           </div>
@@ -1629,7 +1658,9 @@ export default function App() {
                 <select className="ev-select" value={filterSavedSubject} onChange={(e) => setFilterSavedSubject(e.target.value)}>
                   <option value="all">Materia</option>
                   {subjects.map((s) => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
                   ))}
                 </select>
 
@@ -1651,16 +1682,14 @@ export default function App() {
 
               <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
                 {filteredSaved.length === 0 ? (
-                  <div className="ev-muted" style={{ fontSize: 12 }}>No hay clases guardadas con esos filtros.</div>
+                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                    No hay clases guardadas con esos filtros.
+                  </div>
                 ) : (
                   filteredSaved.map((item) => {
                     const active = item.saved_key && item.saved_key === activeSavedKey;
                     return (
-                      <div
-                        key={item.saved_key || item.session_id}
-                        className="ev-card"
-                        style={{ border: active ? "1px solid rgba(30,203,225,0.55)" : undefined }}
-                      >
+                      <div key={item.saved_key || item.session_id} className="ev-card" style={{ border: active ? "1px solid rgba(30,203,225,0.55)" : undefined }}>
                         <div className="ev-card-b">
                           <div className="ev-spread">
                             <div style={{ flex: 1 }}>
@@ -1668,14 +1697,16 @@ export default function App() {
                               <div className="ev-muted" style={{ fontSize: 12, marginTop: 6 }}>
                                 <b>{item.subject_name}</b> • {item.topic_name} • {humanLabelModule(item.module)} • {humanLabelLevel(item.level)}
                               </div>
-                              <div className="ev-muted" style={{ fontSize: 12, marginTop: 4 }}>
-                                {item.created_at ? `Creado: ${item.created_at}` : ""}
-                              </div>
+                              <div className="ev-muted" style={{ fontSize: 12, marginTop: 4 }}>{item.created_at ? `Creado: ${item.created_at}` : ""}</div>
                             </div>
 
                             <div className="ev-row">
-                              <button className="ev-btn" onClick={() => openSaved(item)}>Abrir</button>
-                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>Eliminar</button>
+                              <button className="ev-btn" onClick={() => openSaved(item)}>
+                                Abrir
+                              </button>
+                              <button className="ev-btn" onClick={() => deleteSaved(item.saved_key)}>
+                                Eliminar
+                              </button>
                             </div>
                           </div>
                         </div>
@@ -1689,7 +1720,9 @@ export default function App() {
         </div>
       </div>
 
-      <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>E-Vantis — UI para alumnos.</div>
+      <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
+        E-Vantis — UI para alumnos.
+      </div>
     </div>
   );
 }
