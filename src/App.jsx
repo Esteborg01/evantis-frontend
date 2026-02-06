@@ -38,6 +38,18 @@ function safeJsonParse(s, fallback) {
   }
 }
 
+function makeIdempotencyKey(prefix = "ev") {
+  try {
+    // navegadores modernos
+    const a = new Uint8Array(16);
+    crypto.getRandomValues(a);
+    const hex = Array.from(a).map((b) => b.toString(16).padStart(2, "0")).join("");
+    return `${prefix}_${hex}`;
+  } catch {
+    return `${prefix}_${Math.random().toString(16).slice(2)}_${Date.now()}`;
+  }
+}
+
 function loadChatStore() {
   const parsed = safeJsonParse(localStorage.getItem(LS_CHAT), {});
   if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return {};
@@ -712,18 +724,32 @@ export default function App() {
         setMe(null);
         return;
       }
+
       try {
         const res = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
           headers: {
             "Content-Type": "application/json",
-            ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
             Authorization: `Bearer ${token}`,
           },
         });
+
+        // ✅ NUEVO: si el token ya no sirve, cerramos sesión
+        if (res.status === 401) {
+          setToken("");
+          setMe(null);
+          try {
+            localStorage.removeItem(LS_TOKEN);
+          } catch {}
+          return;
+        }
+
         if (!res.ok) return;
+
         const data = await res.json();
         setMe(data);
-      } catch {}
+      } catch {
+        // opcional: no hacemos nada para no spamear errores
+      }
     })();
   }, [token]);
 
@@ -739,6 +765,59 @@ export default function App() {
     } catch {}
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      try {
+        const qs = new URLSearchParams(window.location.search || "");
+        const tokenQ = (qs.get("token") || qs.get("verify_email_token") || "").trim();
+        const action = (qs.get("action") || "").trim().toLowerCase();
+
+        // Disparador: /?action=verify-email&token=...
+        // o simplemente /verify-email?token=... (si tu hosting lo redirige igual)
+        if (!tokenQ) return;
+        if (action && action !== "verify-email") return;
+
+        setError("");
+        setNotice("Verificando correo…");
+
+        const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(tokenQ)}`, {
+          method: "GET",
+        });
+
+        const rawText = await res.text();
+        let data = null;
+        try {
+          data = rawText ? JSON.parse(rawText) : null;
+        } catch {
+          data = null;
+        }
+
+        if (!res.ok) {
+          const detailRaw = data?.detail ?? rawText ?? `HTTP ${res.status}`;
+          const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+          setError(`No se pudo verificar: ${detail}`);
+          setNotice("");
+          return;
+        }
+
+        const msg = data?.message || "Correo verificado.";
+        setNotice(msg);
+
+        // Limpia querystring para que no se re-ejecute en refresh
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("token");
+          url.searchParams.delete("verify_email_token");
+          url.searchParams.delete("action");
+          window.history.replaceState({}, "", url.toString());
+        } catch {}
+      } catch (e) {
+        setError(e?.message || "Error verificando correo.");
+        setNotice("");
+      }
+    })();
+  }, []);
+
   // =========================
   // USAGE
   // =========================
@@ -746,7 +825,6 @@ export default function App() {
     try {
       const res = await fetch(`${API_BASE}/usage/me`, {
         headers: {
-          ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
           Authorization: `Bearer ${currentToken}`,
         },
       });
@@ -793,6 +871,15 @@ export default function App() {
 
       if (!res.ok) {
         const detail = typeof data?.detail === "string" ? data.detail : JSON.stringify(data?.detail || data);
+
+        // NUEVO: email no verificado
+        if (res.status === 403 && /no verificado|verifica/i.test(detail)) {
+          // Si backend manda link / token en detail, lo mostramos tal cual.
+          setError(detail);
+          setNotice("Revisa tu correo. Si abriste el link de verificación, vuelve aquí e intenta login.");
+          return;
+        }
+
         throw new Error(`Login falló (HTTP ${res.status}). ${detail}`);
       }
 
@@ -848,11 +935,20 @@ export default function App() {
   }
 
   function handleLogout() {
+    // 1) Corta sesión en memoria
     setToken("");
     setMe(null);
+
+    // 2) Limpia token persistido INMEDIATO (evita re-login fantasma)
+    try {
+      localStorage.removeItem(LS_TOKEN);
+    } catch {}
+
+    // 3) UI
     setNotice("");
     setError("");
 
+    // 4) Limpia estado de trabajo
     setResult(null);
     setActiveSavedKey("");
     setChatOpen(false);
@@ -860,6 +956,7 @@ export default function App() {
     setChatInput("");
     setChatStatus("");
 
+    // 5) Filtros
     setSearchSaved("");
     setFilterSavedSubject("all");
     setFilterSavedModule("all");
@@ -897,6 +994,11 @@ export default function App() {
       return;
     }
 
+    if (!API_KEY) {
+      setError("Falta VITE_API_KEY. Revisa .env (VITE_API_KEY) y reinicia npm run dev.");
+      return;
+    }
+
     try {
       const payload = {
         subject_id: subjectId,
@@ -916,12 +1018,14 @@ export default function App() {
 
       let data = {};
       try {
+        const idemKey = makeIdempotencyKey("teach");
         const res = await fetch(`${API_BASE}${TEACH_CURRICULUM_PATH}`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            ...(API_KEY ? { "X-API-Key": API_KEY } : {}),
+            "X-API-Key": API_KEY,
             Authorization: `Bearer ${token}`,
+            "Idempotency-Key": idemKey,
           },
           body: JSON.stringify(payload),
         });
@@ -931,6 +1035,26 @@ export default function App() {
         if (!res.ok) {
           const detail = String(data?.detail || res.statusText || "Error");
 
+          // ✅ NUEVO: sesión expirada
+          if (res.status === 401) {
+            setError("Tu sesión expiró. Inicia sesión de nuevo.");
+            setNotice("");
+            setToken("");
+            setMe(null);
+            try {
+              localStorage.removeItem(LS_TOKEN);
+            } catch {}
+            return;
+          }
+
+          // ✅ NUEVO: acceso prohibido (ej. email no verificado, plan, etc.)
+          if (res.status === 403) {
+            setError(detail);
+            setNotice("");
+            return;
+          }
+
+          // Tus casos actuales
           if (res.status === 429 && detail.includes("Límite mensual alcanzado")) {
             setError(detail);
             setQuotaBlocked(true);
@@ -942,6 +1066,7 @@ export default function App() {
             setNotice("");
             return;
           }
+
           throw new Error(detail);
         }
 
