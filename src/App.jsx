@@ -924,6 +924,40 @@ export default function App() {
     }
   }
 
+  async function startCheckout(planSlug) {
+    setError("");
+    setNotice("");
+
+    try {
+      const tkn = localStorage.getItem(LS_TOKEN);
+      if (!tkn) throw new Error("No hay sesión activa.");
+      if (!API_KEY) throw new Error("Falta VITE_API_KEY en el frontend.");
+
+      const res = await fetch(`${API_BASE}/billing/checkout`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+          Authorization: `Bearer ${tkn}`,
+        },
+        body: JSON.stringify({ plan: planSlug }), // "pro" | "premium"
+      });
+
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const detail = String(data?.detail || data?.message || res.statusText || `HTTP ${res.status}`);
+        throw new Error(detail);
+      }
+
+      const url = (data?.url || "").trim();
+      if (!url) throw new Error("Checkout no devolvió URL.");
+
+      window.location.href = url;
+    } catch (e) {
+      setError(e?.message || "No se pudo iniciar checkout.");
+    }
+  }
+
   async function handleBillingPortal() {
     setError("");
     setNotice("");
@@ -983,7 +1017,7 @@ export default function App() {
     return (data && (data.detail || data.message || data.error)) || "";
   }
 
-  // === LOGIN (OAuth2PasswordRequestForm: x-www-form-urlencoded con username/password) ===
+  // === LOGIN (OAuth2PasswordRequestForm: x-www-form-urlencoded) ===
   async function handleLogin(e) {
     e?.preventDefault?.();
     setError("");
@@ -999,16 +1033,13 @@ export default function App() {
     try {
       setAuthStatus("Iniciando sesión...");
 
-      // ⚠️ IMPORTANTE: /auth/login espera FormData (username/password), NO JSON
       const form = new URLSearchParams();
       form.set("username", emailTrim);
       form.set("password", password);
 
-      const resp = await fetch(`${API_BASE}/auth/login`, {
+      const resp = await fetch(`${API_BASE}${AUTH_LOGIN_PATH}`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
         body: form.toString(),
       });
 
@@ -1016,7 +1047,6 @@ export default function App() {
 
       if (!resp.ok) {
         const detail = normalizeDetail(data);
-        // Mensaje amigable si backend manda "Correo no verificado"
         if (resp.status === 403 && /verificad/i.test(detail)) {
           setError("Correo no verificado. Revisa tu bandeja o solicita reenvío del enlace.");
         } else {
@@ -1033,10 +1063,7 @@ export default function App() {
         return;
       }
 
-      try {
-        localStorage.setItem(LS_TOKEN, accessToken);
-      } catch {}
-
+      localStorage.setItem(LS_TOKEN, accessToken);
       setToken(accessToken);
       setAuthStatus("OK");
       setNotice("Sesión iniciada.");
@@ -1780,10 +1807,11 @@ export default function App() {
 
           {!hasPro ? (
             <>
-              <button className="ev-btn ev-btn-cta" onClick={() => handleUpgrade("pro")}>
+              <button className="ev-btn ev-btn-cta" onClick={() => startCheckout("pro")}>
                 Upgrade Pro
               </button>
-              <button className="ev-btn" onClick={() => handleUpgrade("premium")}>
+              
+              <button className="ev-btn" onClick={() => startCheckout("premium")}>
                 Premium
               </button>
             </>
