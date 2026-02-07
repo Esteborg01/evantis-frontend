@@ -14,6 +14,11 @@ const AUTH_LOGIN_PATH = "/auth/login";
 const AUTH_REGISTER_PATH = "/auth/register";
 const AUTH_ME_PATH = "/auth/me";
 const TEACH_CURRICULUM_PATH = "/teach/curriculum";
+
+// Billing (Stripe)
+const BILLING_CHECKOUT_PATH = "/billing/checkout";
+const BILLING_PORTAL_PATH = "/billing/portal";
+
 const SHOW_DEBUG_PILLS = false;
 
 // Paleta E-Vantis (para usos inline puntuales)
@@ -525,6 +530,32 @@ export default function App() {
   const [usage, setUsage] = useState(null);
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
 
+  async function fetchMe(currentToken) {
+    if (!currentToken) {
+      setMe(null);
+      return;
+    }
+    try {
+      const res = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${currentToken}`,
+        },
+      });
+
+      if (res.status === 401) {
+        setToken("");
+        setMe(null);
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        return;
+      }
+
+      if (!res.ok) return;
+      const data = await res.json();
+      setMe(data);
+    } catch {}
+  }
+
   // =========================
   // UI
   // =========================
@@ -719,38 +750,8 @@ export default function App() {
   // LOAD /auth/me
   // =========================
   useEffect(() => {
-    (async () => {
-      if (!token) {
-        setMe(null);
-        return;
-      }
-
-      try {
-        const res = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        // ✅ NUEVO: si el token ya no sirve, cerramos sesión
-        if (res.status === 401) {
-          setToken("");
-          setMe(null);
-          try {
-            localStorage.removeItem(LS_TOKEN);
-          } catch {}
-          return;
-        }
-
-        if (!res.ok) return;
-
-        const data = await res.json();
-        setMe(data);
-      } catch {
-        // opcional: no hacemos nada para no spamear errores
-      }
-    })();
+    fetchMe(token);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token]);
 
   // =========================
@@ -817,6 +818,35 @@ export default function App() {
       }
     })();
   }, []);
+   
+  useEffect(() => {
+    try {
+      const qs = new URLSearchParams(window.location.search || "");
+      const success = (qs.get("success") || "").trim();
+      const canceled = (qs.get("canceled") || "").trim();
+
+      if (!success && !canceled) return;
+
+      if (success) setNotice("Pago completado. Actualizando plan…");
+      if (canceled) setNotice("Pago cancelado.");
+
+      // refrescar me/usage (plan puede haber cambiado)
+      const tkn = localStorage.getItem(LS_TOKEN) || token;
+      if (tkn) {
+        fetchMe(tkn);
+        fetchUsage(tkn);
+      }
+
+      // limpiar params para no repetir al refresh
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("success");
+        url.searchParams.delete("canceled");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
+    } catch {}
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // =========================
   // USAGE
@@ -843,6 +873,106 @@ export default function App() {
   // ACTIONS
   // =========================
   // Helpers (opcional)
+  async function handleUpgrade(planWanted = "pro") {
+    setError("");
+    setNotice("");
+
+    if (!token) {
+      setError("Inicia sesión para continuar.");
+      return;
+    }
+    if (!API_KEY) {
+      setError("Falta VITE_API_KEY. Revisa .env (VITE_API_KEY) y reinicia npm run dev.");
+      return;
+    }
+
+    try {
+      setNotice("Redirigiendo a pago seguro…");
+
+      const res = await fetch(`${API_BASE}${BILLING_CHECKOUT_PATH}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+          Authorization: `Bearer ${token}`,
+          "Idempotency-Key": makeIdempotencyKey("checkout"),
+        },
+        body: JSON.stringify({ plan: planWanted }), // "pro" | "premium"
+      });
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        const detail = normalizeDetail(data) || `No se pudo iniciar checkout (HTTP ${res.status}).`;
+        setNotice("");
+        setError(detail);
+        return;
+      }
+
+      const url = data?.url || data?.checkout_url;
+      if (!url) {
+        setNotice("");
+        setError("Checkout iniciado, pero no llegó URL de Stripe.");
+        return;
+      }
+
+      window.location.href = url;
+    } catch (e) {
+      setNotice("");
+      setError(e?.message || "Error iniciando checkout.");
+    }
+  }
+
+  async function handleBillingPortal() {
+    setError("");
+    setNotice("");
+
+    if (!token) {
+      setError("Inicia sesión para continuar.");
+      return;
+    }
+    if (!API_KEY) {
+      setError("Falta VITE_API_KEY. Revisa .env (VITE_API_KEY) y reinicia npm run dev.");
+      return;
+    }
+
+    try {
+      setNotice("Abriendo portal de facturación…");
+
+      const res = await fetch(`${API_BASE}${BILLING_PORTAL_PATH}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-API-Key": API_KEY,
+          Authorization: `Bearer ${token}`,
+          "Idempotency-Key": makeIdempotencyKey("portal"),
+        },
+        body: JSON.stringify({}),
+      });
+
+      const data = await readJsonSafe(res);
+
+      if (!res.ok) {
+        const detail = normalizeDetail(data) || `No se pudo abrir portal (HTTP ${res.status}).`;
+        setNotice("");
+        setError(detail);
+        return;
+      }
+
+      const url = data?.url || data?.portal_url;
+      if (!url) {
+        setNotice("");
+        setError("Portal iniciado, pero no llegó URL de Stripe.");
+        return;
+      }
+
+      window.location.href = url;
+    } catch (e) {
+      setNotice("");
+      setError(e?.message || "Error abriendo portal.");
+    }
+  }
+  
   async function readJsonSafe(resp) {
     const text = await resp.text();
     try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
@@ -1630,12 +1760,28 @@ export default function App() {
             <div className="ev-sub">Clases • Exámenes • Casos ENARM • Guardadas • Chat</div>
           </div>
         </div>
-
+        
         <div className="ev-row">
           <span className="ev-pill">
             Plan: <b>{me?.plan || "—"}</b>
           </span>
           {hasPro ? <span className="ev-badge ev-badge-accent">Pro/Premium</span> : <span className="ev-badge">Free</span>}
+
+          {!hasPro ? (
+            <>
+              <button className="ev-btn ev-btn-cta" onClick={() => handleUpgrade("pro")}>
+                Upgrade Pro
+              </button>
+              <button className="ev-btn" onClick={() => handleUpgrade("premium")}>
+                Premium
+              </button>
+            </>
+          ) : (
+            <button className="ev-btn" onClick={handleBillingPortal}>
+              Facturación
+            </button>
+          )}
+
           <button className="ev-btn" onClick={handleLogout}>
             Logout
           </button>
