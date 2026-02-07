@@ -982,7 +982,7 @@ export default function App() {
     return (data && (data.detail || data.message || data.error)) || "";
   }
 
-  // === LOGIN (para evitar "handleLogin is not defined") ===
+  // === LOGIN (OAuth2PasswordRequestForm: x-www-form-urlencoded con username/password) ===
   async function handleLogin(e) {
     e?.preventDefault?.();
     setError("");
@@ -998,10 +998,17 @@ export default function App() {
     try {
       setAuthStatus("Iniciando sesión...");
 
+      // ⚠️ IMPORTANTE: /auth/login espera FormData (username/password), NO JSON
+      const form = new URLSearchParams();
+      form.set("username", emailTrim);
+      form.set("password", password);
+
       const resp = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email: emailTrim, password }),
+        headers: {
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+        body: form.toString(),
       });
 
       const data = await readJsonSafe(resp);
@@ -1025,7 +1032,10 @@ export default function App() {
         return;
       }
 
-      localStorage.setItem(LS_TOKEN, accessToken);
+      try {
+        localStorage.setItem(LS_TOKEN, accessToken);
+      } catch {}
+
       setToken(accessToken);
       setAuthStatus("OK");
       setNotice("Sesión iniciada.");
