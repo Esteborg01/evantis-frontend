@@ -529,6 +529,7 @@ export default function App() {
   const [me, setMe] = useState(null);
   const [usage, setUsage] = useState(null);
   const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authStatus, setAuthStatus] = useState("");
 
   async function fetchMe(currentToken) {
     if (!currentToken) {
