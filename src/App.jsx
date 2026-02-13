@@ -519,12 +519,188 @@ function Banner({ notice, error }) {
   );
 }
 
-export default function App() {
+/* =========================
+   ROUTE SCREENS (DEDICADOS)
+========================= */
 
-  const pathname = window.location.pathname;
+function VerifyEmailScreen({ API_BASE }) {
+  const [notice, setNotice] = useState("Verificando correo…");
+  const [error, setError] = useState("");
 
-  const isVerifyRoute = pathname === "/verify-email";
-  const isResetRoute = pathname === "/reset-password";
+  useEffect(() => {
+    (async () => {
+      try {
+        const qs = new URLSearchParams(window.location.search || "");
+        const tokenQ = (qs.get("token") || qs.get("verify_email_token") || "").trim();
+
+        if (!tokenQ) {
+          setNotice("");
+          setError("Falta token.");
+          return;
+        }
+
+        const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(tokenQ)}`, { method: "GET" });
+
+        const raw = await res.text();
+        let data = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+
+        if (!res.ok) {
+          const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+          const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+          setNotice("");
+          setError(`No se pudo verificar: ${detail}`);
+          return;
+        }
+
+        setError("");
+        setNotice(data?.message || "Correo verificado ✅");
+
+        // limpia querystring para evitar re-ejecución al refresh
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("token");
+          url.searchParams.delete("verify_email_token");
+          url.searchParams.delete("action");
+          window.history.replaceState({}, "", url.toString());
+        } catch {}
+      } catch (e) {
+        setNotice("");
+        setError(e?.message || "Error verificando correo.");
+      }
+    })();
+  }, [API_BASE]);
+
+  return (
+    <div className="ev-wrap">
+      <div className="ev-topbar">
+        <div className="ev-brand">
+          <div className="ev-logo" />
+          <div>
+            <div className="ev-title">E-Vantis</div>
+            <div className="ev-sub">Verificación de correo</div>
+          </div>
+        </div>
+      </div>
+
+      <Banner notice={notice} error={error} />
+
+      <div className="ev-card" style={{ marginTop: 20 }}>
+        <div className="ev-card-b">
+          <button className="ev-btn ev-btn-primary" onClick={() => (window.location.href = "/?auth=login")}>
+            Ir a iniciar sesión
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ResetPasswordScreen({ API_BASE }) {
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const tokenQ = useMemo(() => {
+    const qs = new URLSearchParams(window.location.search || "");
+    return (qs.get("token") || "").trim();
+  }, []);
+
+  async function handleResetPassword() {
+    setError("");
+    setNotice("");
+
+    if (!tokenQ) {
+      setError("Token inválido.");
+      return;
+    }
+    if ((newPassword || "").length < 8) {
+      setError("La contraseña debe tener mínimo 8 caracteres.");
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setNotice("Actualizando contraseña…");
+
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token: tokenQ, new_password: newPassword }),
+      });
+
+      const raw = await res.text();
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+
+      if (!res.ok) {
+        const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+        setNotice("");
+        setError(`No se pudo actualizar: ${detail}`);
+        return;
+      }
+
+      setError("");
+      setNotice("Contraseña actualizada ✅ Ya puedes iniciar sesión.");
+
+      setTimeout(() => {
+        window.location.href = "/?auth=login";
+      }, 1200);
+    } catch (e) {
+      setNotice("");
+      setError(e?.message || "Error de red.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ev-wrap">
+      <div className="ev-topbar">
+        <div className="ev-brand">
+          <div className="ev-logo" />
+          <div>
+            <div className="ev-title">E-Vantis</div>
+            <div className="ev-sub">Restablecer contraseña</div>
+          </div>
+        </div>
+      </div>
+
+      <Banner notice={notice} error={error} />
+
+      <div className="ev-card" style={{ marginTop: 20 }}>
+        <div className="ev-card-b">
+          <div className="ev-field">
+            <label className="ev-label">Nueva contraseña</label>
+            <input className="ev-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+          </div>
+
+          <div className="ev-field">
+            <label className="ev-label">Confirmar contraseña</label>
+            <input className="ev-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
+          </div>
+
+          <button className="ev-btn ev-btn-primary" onClick={handleResetPassword} disabled={busy}>
+            {busy ? "Procesando…" : "Actualizar contraseña"}
+          </button>
+
+          <button className="ev-btn" style={{ marginTop: 10 }} onClick={() => (window.location.href = "/?auth=login")}>
+            Ir a login
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function MainApp() {
 
   // =========================
   // AUTH
@@ -771,59 +947,6 @@ export default function App() {
       if (auth === "register") setAuthMode("register");
       if (auth === "login") setAuthMode("login");
     } catch {}
-  }, []);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const qs = new URLSearchParams(window.location.search || "");
-        const tokenQ = (qs.get("token") || qs.get("verify_email_token") || "").trim();
-        const action = (qs.get("action") || "").trim().toLowerCase();
-
-        // Disparador: /?action=verify-email&token=...
-        // o simplemente /verify-email?token=... (si tu hosting lo redirige igual)
-        if (!tokenQ) return;
-        if (action && action !== "verify-email") return;
-
-        setError("");
-        setNotice("Verificando correo…");
-
-        const res = await fetch(`${API_BASE}/auth/verify-email?token=${encodeURIComponent(tokenQ)}`, {
-          method: "GET",
-        });
-
-        const rawText = await res.text();
-        let data = null;
-        try {
-          data = rawText ? JSON.parse(rawText) : null;
-        } catch {
-          data = null;
-        }
-
-        if (!res.ok) {
-          const detailRaw = data?.detail ?? rawText ?? `HTTP ${res.status}`;
-          const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
-          setError(`No se pudo verificar: ${detail}`);
-          setNotice("");
-          return;
-        }
-
-        const msg = data?.message || "Correo verificado.";
-        setNotice(msg);
-
-        // Limpia querystring para que no se re-ejecute en refresh
-        try {
-          const url = new URL(window.location.href);
-          url.searchParams.delete("token");
-          url.searchParams.delete("verify_email_token");
-          url.searchParams.delete("action");
-          window.history.replaceState({}, "", url.toString());
-        } catch {}
-      } catch (e) {
-        setError(e?.message || "Error verificando correo.");
-        setNotice("");
-      }
-    })();
   }, []);
    
   useEffect(() => {
@@ -1712,34 +1835,6 @@ export default function App() {
   // =========================
   // VERIFY EMAIL ROUTE
   // =========================
-  if (isVerifyRoute) {
-    return (
-      <div className="ev-wrap">
-        <div className="ev-topbar">
-          <div className="ev-brand">
-            <div className="ev-logo" />
-            <div>
-              <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Verificación de correo</div>
-            </div>
-          </div>
-        </div>
-
-        <Banner notice={notice} error={error} />
-
-        <div className="ev-card" style={{ marginTop: 20 }}>
-          <div className="ev-card-b">
-            <button
-              className="ev-btn ev-btn-primary"
-              onClick={() => (window.location.href = "/?auth=login")}
-            >
-              Ir a iniciar sesión
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
   
   if (!token) {
     return (
@@ -1823,118 +1918,6 @@ export default function App() {
     );
   }
 
-
-  // =========================
-  // RESET PASSWORD ROUTE
-  // =========================
-  const [newPassword, setNewPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [resetStatus, setResetStatus] = useState("");
-
-  async function handleResetPassword() {
-    setError("");
-    setNotice("");
-
-    const tokenQ = new URLSearchParams(window.location.search).get("token");
-    if (!tokenQ) {
-      setError("Token inválido.");
-      return;
-    }
-
-    if (newPassword.length < 8) {
-      setError("La contraseña debe tener mínimo 8 caracteres.");
-      return;
-    }
-
-    if (newPassword !== confirmPassword) {
-      setError("Las contraseñas no coinciden.");
-      return;
-    }
-
-    try {
-      setResetStatus("Actualizando contraseña...");
-
-      const res = await fetch(`${API_BASE}/auth/reset-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
-        body: JSON.stringify({
-          token: tokenQ,
-          new_password: newPassword
-        })
-      });
-
-      const data = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(data?.detail || "No se pudo actualizar.");
-        setResetStatus("");
-        return;
-      }
-
-      setNotice("Contraseña actualizada correctamente.");
-      setResetStatus("");
-
-      setTimeout(() => {
-        window.location.href = "/?auth=login";
-      }, 1500);
-
-    } catch (e) {
-      setError(e.message || "Error de red.");
-      setResetStatus("");
-    }
-  }
-
-  if (isResetRoute) {
-    return (
-      <div className="ev-wrap">
-        <div className="ev-topbar">
-          <div className="ev-brand">
-            <div className="ev-logo" />
-            <div>
-              <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Restablecer contraseña</div>
-            </div>
-          </div>
-        </div>
-
-        <Banner notice={notice} error={error} />
-
-        <div className="ev-card" style={{ marginTop: 20 }}>
-          <div className="ev-card-b">
-            <div className="ev-field">
-              <label className="ev-label">Nueva contraseña</label>
-              <input
-                className="ev-input"
-                type="password"
-                value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
-              />
-            </div>
-
-            <div className="ev-field">
-              <label className="ev-label">Confirmar contraseña</label>
-              <input
-                className="ev-input"
-                type="password"
-                value={confirmPassword}
-                onChange={(e) => setConfirmPassword(e.target.value)}
-              />
-            </div>
-
-            <button
-              className="ev-btn ev-btn-primary"
-              onClick={handleResetPassword}
-              disabled={!!resetStatus}
-            >
-              {resetStatus || "Actualizar contraseña"}
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
   /* =========================
      APP SHELL (logueado)
   ========================= */
@@ -2350,4 +2333,18 @@ export default function App() {
       </div>
     </div>
   );
+}
+
+export default function AppRouter() {
+  const pathname = (window.location.pathname || "").replace(/\/$/, "").toLowerCase();
+
+  if (pathname === "/verify-email") {
+    return <VerifyEmailScreen API_BASE={API_BASE} />;
+  }
+
+  if (pathname === "/reset-password") {
+    return <ResetPasswordScreen API_BASE={API_BASE} />;
+  }
+
+  return <MainApp />;
 }
