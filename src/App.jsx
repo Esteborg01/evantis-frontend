@@ -520,6 +520,12 @@ function Banner({ notice, error }) {
 }
 
 export default function App() {
+
+  const pathname = window.location.pathname;
+
+  const isVerifyRoute = pathname === "/verify-email";
+  const isResetRoute = pathname === "/reset-password";
+
   // =========================
   // AUTH
   // =========================
@@ -1703,6 +1709,38 @@ export default function App() {
   /* =========================
      AUTH SCREEN
   ========================= */
+  // =========================
+  // VERIFY EMAIL ROUTE
+  // =========================
+  if (isVerifyRoute) {
+    return (
+      <div className="ev-wrap">
+        <div className="ev-topbar">
+          <div className="ev-brand">
+            <div className="ev-logo" />
+            <div>
+              <div className="ev-title">E-Vantis</div>
+              <div className="ev-sub">Verificación de correo</div>
+            </div>
+          </div>
+        </div>
+
+        <Banner notice={notice} error={error} />
+
+        <div className="ev-card" style={{ marginTop: 20 }}>
+          <div className="ev-card-b">
+            <button
+              className="ev-btn ev-btn-primary"
+              onClick={() => (window.location.href = "/?auth=login")}
+            >
+              Ir a iniciar sesión
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  
   if (!token) {
     return (
       <div className="ev-wrap">
@@ -1785,6 +1823,118 @@ export default function App() {
     );
   }
 
+
+  // =========================
+  // RESET PASSWORD ROUTE
+  // =========================
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [resetStatus, setResetStatus] = useState("");
+
+  async function handleResetPassword() {
+    setError("");
+    setNotice("");
+
+    const tokenQ = new URLSearchParams(window.location.search).get("token");
+    if (!tokenQ) {
+      setError("Token inválido.");
+      return;
+    }
+
+    if (newPassword.length < 8) {
+      setError("La contraseña debe tener mínimo 8 caracteres.");
+      return;
+    }
+
+    if (newPassword !== confirmPassword) {
+      setError("Las contraseñas no coinciden.");
+      return;
+    }
+
+    try {
+      setResetStatus("Actualizando contraseña...");
+
+      const res = await fetch(`${API_BASE}/auth/reset-password`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          token: tokenQ,
+          new_password: newPassword
+        })
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data?.detail || "No se pudo actualizar.");
+        setResetStatus("");
+        return;
+      }
+
+      setNotice("Contraseña actualizada correctamente.");
+      setResetStatus("");
+
+      setTimeout(() => {
+        window.location.href = "/?auth=login";
+      }, 1500);
+
+    } catch (e) {
+      setError(e.message || "Error de red.");
+      setResetStatus("");
+    }
+  }
+
+  if (isResetRoute) {
+    return (
+      <div className="ev-wrap">
+        <div className="ev-topbar">
+          <div className="ev-brand">
+            <div className="ev-logo" />
+            <div>
+              <div className="ev-title">E-Vantis</div>
+              <div className="ev-sub">Restablecer contraseña</div>
+            </div>
+          </div>
+        </div>
+
+        <Banner notice={notice} error={error} />
+
+        <div className="ev-card" style={{ marginTop: 20 }}>
+          <div className="ev-card-b">
+            <div className="ev-field">
+              <label className="ev-label">Nueva contraseña</label>
+              <input
+                className="ev-input"
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+              />
+            </div>
+
+            <div className="ev-field">
+              <label className="ev-label">Confirmar contraseña</label>
+              <input
+                className="ev-input"
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+              />
+            </div>
+
+            <button
+              className="ev-btn ev-btn-primary"
+              onClick={handleResetPassword}
+              disabled={!!resetStatus}
+            >
+              {resetStatus || "Actualizar contraseña"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
   /* =========================
      APP SHELL (logueado)
   ========================= */
@@ -1810,7 +1960,7 @@ export default function App() {
               <button className="ev-btn ev-btn-cta" onClick={() => startCheckout("pro")}>
                 Upgrade Pro
               </button>
-              
+
               <button className="ev-btn" onClick={() => startCheckout("premium")}>
                 Premium
               </button>
