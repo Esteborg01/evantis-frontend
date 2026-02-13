@@ -1908,6 +1908,11 @@ function MainApp() {
                 Al continuar aceptas uso académico. No sustituye juicio clínico.
               </div>
             </div>
+            <div className="ev-row" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
+              <button className="ev-btn" type="button" onClick={handleResendVerification}>
+                Reenviar verificación
+              </button>
+            </div>
           </div>
         </div>
 
