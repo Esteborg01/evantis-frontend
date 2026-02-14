@@ -603,10 +603,55 @@ function ResetPasswordScreen({ API_BASE }) {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [busy, setBusy] = useState(false);
 
+  // null = validando, true = válido, false = inválido/usado/expirado
+  const [tokenValid, setTokenValid] = useState(null);
+
   const tokenQ = useMemo(() => {
     const qs = new URLSearchParams(window.location.search || "");
     return (qs.get("token") || "").trim();
   }, []);
+
+  // Validar token al cargar pantalla
+  useEffect(() => {
+    (async () => {
+      try {
+        setNotice("");
+        setError("");
+
+        if (!tokenQ) {
+          setTokenValid(false);
+          setError("Token inválido.");
+          return;
+        }
+
+        const res = await fetch(
+          `${API_BASE}/auth/reset-password-status?token=${encodeURIComponent(tokenQ)}`,
+          { method: "GET" }
+        );
+
+        const raw = await res.text();
+        let data = null;
+        try {
+          data = raw ? JSON.parse(raw) : null;
+        } catch {
+          data = null;
+        }
+
+        if (!res.ok) {
+          const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+          const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+          setTokenValid(false);
+          setError(detail || "Token inválido o expirado.");
+          return;
+        }
+
+        setTokenValid(true);
+      } catch (e) {
+        setTokenValid(false);
+        setError(e?.message || "No se pudo validar el token.");
+      }
+    })();
+  }, [API_BASE, tokenQ]);
 
   async function handleResetPassword() {
     setError("");
@@ -637,22 +682,43 @@ function ResetPasswordScreen({ API_BASE }) {
 
       const raw = await res.text();
       let data = null;
-      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
 
       if (!res.ok) {
         const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
         const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+
+        // Si backend dice token inválido/expirado/usado
+        if (/token/i.test(detail) && /inválido|invalido|expirado|usado/i.test(detail)) {
+          setTokenValid(false);
+          setNotice("");
+          setError("Este enlace ya fue usado o expiró. Solicita uno nuevo.");
+          return;
+        }
+
         setNotice("");
         setError(`No se pudo actualizar: ${detail}`);
         return;
       }
 
       setError("");
-      setNotice("Contraseña actualizada ✅ Ya puedes iniciar sesión.");
+      setNotice("Contraseña actualizada ✅");
 
+      // Limpia token del URL para que la liga no quede “viva”
+      try {
+        const url = new URL(window.location.href);
+        url.searchParams.delete("token");
+        window.history.replaceState({}, "", url.toString());
+      } catch {}
+
+      // Evita back a la pantalla del token
       setTimeout(() => {
-        window.location.href = "/?auth=login";
-      }, 1200);
+        window.location.replace("/?auth=login");
+      }, 800);
     } catch (e) {
       setNotice("");
       setError(e?.message || "Error de red.");
@@ -677,23 +743,71 @@ function ResetPasswordScreen({ API_BASE }) {
 
       <div className="ev-card" style={{ marginTop: 20 }}>
         <div className="ev-card-b">
-          <div className="ev-field">
-            <label className="ev-label">Nueva contraseña</label>
-            <input className="ev-input" type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
-          </div>
+          {tokenValid === null ? (
+            <div className="ev-muted" style={{ fontSize: 13 }}>
+              Validando enlace…
+            </div>
+          ) : tokenValid === false ? (
+            <>
+              <div className="ev-alert err">
+                Este enlace ya fue usado o expiró.
+              </div>
 
-          <div className="ev-field">
-            <label className="ev-label">Confirmar contraseña</label>
-            <input className="ev-input" type="password" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} />
-          </div>
+              <button
+                className="ev-btn ev-btn-primary"
+                style={{ marginTop: 10 }}
+                onClick={() => window.location.replace("/?auth=recover")}
+              >
+                Solicitar nuevo enlace
+              </button>
 
-          <button className="ev-btn ev-btn-primary" onClick={handleResetPassword} disabled={busy}>
-            {busy ? "Procesando…" : "Actualizar contraseña"}
-          </button>
+              <button
+                className="ev-btn"
+                style={{ marginTop: 10 }}
+                onClick={() => window.location.replace("/?auth=login")}
+              >
+                Ir a login
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="ev-field">
+                <label className="ev-label">Nueva contraseña</label>
+                <input
+                  className="ev-input"
+                  type="password"
+                  value={newPassword}
+                  onChange={(e) => setNewPassword(e.target.value)}
+                />
+              </div>
 
-          <button className="ev-btn" style={{ marginTop: 10 }} onClick={() => (window.location.href = "/?auth=login")}>
-            Ir a login
-          </button>
+              <div className="ev-field">
+                <label className="ev-label">Confirmar contraseña</label>
+                <input
+                  className="ev-input"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                />
+              </div>
+
+              <button
+                className="ev-btn ev-btn-primary"
+                onClick={handleResetPassword}
+                disabled={busy}
+              >
+                {busy ? "Procesando…" : "Actualizar contraseña"}
+              </button>
+
+              <button
+                className="ev-btn"
+                style={{ marginTop: 10 }}
+                onClick={() => window.location.replace("/?auth=login")}
+              >
+                Ir a login
+              </button>
+            </>
+          )}
         </div>
       </div>
     </div>
