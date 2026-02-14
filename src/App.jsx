@@ -700,6 +700,102 @@ function ResetPasswordScreen({ API_BASE }) {
   );
 }
 
+function RequestResetScreen({ API_BASE, email, setEmail }) {
+  const [notice, setNotice] = useState("");
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  async function handleRequestReset() {
+    setError("");
+    setNotice("");
+
+    const emailTrim = (email || "").trim().toLowerCase();
+    if (!emailTrim) {
+      setError("Ingresa tu correo.");
+      return;
+    }
+
+    try {
+      setBusy(true);
+      setNotice("Enviando instrucciones…");
+
+      const res = await fetch(`${API_BASE}/auth/request-reset`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email: emailTrim }),
+      });
+
+      const raw = await res.text();
+      let data = null;
+      try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+
+      if (!res.ok) {
+        const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+        setNotice("");
+        setError(`No se pudo procesar: ${detail}`);
+        return;
+      }
+
+      // Mensaje genérico (anti-enumeración)
+      setError("");
+      setNotice("Listo. Si el correo existe, se enviaron instrucciones para recuperar tu cuenta.");
+    } catch (e) {
+      setNotice("");
+      setError(e?.message || "Error de red.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="ev-wrap">
+      <div className="ev-topbar">
+        <div className="ev-brand">
+          <div className="ev-logo" />
+          <div>
+            <div className="ev-title">E-Vantis</div>
+            <div className="ev-sub">Recuperar cuenta</div>
+          </div>
+        </div>
+      </div>
+
+      <Banner notice={notice} error={error} />
+
+      <div className="ev-card" style={{ marginTop: 14 }}>
+        <div className="ev-card-h">
+          <div>
+            <div className="ev-card-t">¿Olvidaste tu contraseña o usuario?</div>
+            <div className="ev-card-d">Te enviaremos un enlace para restablecer tu contraseña.</div>
+          </div>
+          <div className="ev-row">
+            <button className="ev-btn" type="button" onClick={() => (window.location.href = "/?auth=login")}>
+              Volver
+            </button>
+          </div>
+        </div>
+
+        <div className="ev-card-b">
+          <div className="ev-field">
+            <label className="ev-label">Email</label>
+            <input
+              className="ev-input"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="tu@email.com"
+              autoComplete="email"
+            />
+          </div>
+
+          <button className="ev-btn ev-btn-primary" onClick={handleRequestReset} disabled={busy} style={{ marginTop: 10 }}>
+            {busy ? "Procesando…" : "Enviar instrucciones"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function MainApp() {
 
   // =========================
@@ -710,8 +806,23 @@ function MainApp() {
   const [token, setToken] = useState(localStorage.getItem(LS_TOKEN) || "");
   const [me, setMe] = useState(null);
   const [usage, setUsage] = useState(null);
-  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authMode, setAuthMode] = useState("login"); // "login" | "register" | "recover"
   const [authStatus, setAuthStatus] = useState("");
+
+  async function readJsonSafe(resp) {
+    try {
+      return await resp.json();
+    } catch {
+      return {};
+    }
+  }
+
+  function normalizeDetail(data) {
+    if (!data) return "";
+    if (typeof data === "string") return data;
+    if (typeof data.detail === "string") return data.detail;
+    return JSON.stringify(data);
+  }
 
   async function fetchMe(currentToken) {
     if (!currentToken) {
@@ -945,7 +1056,8 @@ function MainApp() {
       const qs = new URLSearchParams(window.location.search || "");
       const auth = (qs.get("auth") || "").toLowerCase();
       if (auth === "register") setAuthMode("register");
-      if (auth === "login") setAuthMode("login");
+      else if (auth === "recover") setAuthMode("recover");
+      else setAuthMode("login");
     } catch {}
   }, []);
    
@@ -1135,15 +1247,6 @@ function MainApp() {
       setNotice("");
       setError(e?.message || "Error abriendo portal.");
     }
-  }
-  
-  async function readJsonSafe(resp) {
-    const text = await resp.text();
-    try { return text ? JSON.parse(text) : {}; } catch { return { raw: text }; }
-  }
-
-  function normalizeDetail(data) {
-    return (data && (data.detail || data.message || data.error)) || "";
   }
 
   // === LOGIN (OAuth2PasswordRequestForm: x-www-form-urlencoded) ===
@@ -1829,99 +1932,157 @@ function MainApp() {
     }
   }
 
-  /* =========================
-     AUTH SCREEN
-  ========================= */
   // =========================
   // VERIFY EMAIL ROUTE
   // =========================
-  
-  if (!token) {
-    return (
-      <div className="ev-wrap">
-        <div className="ev-topbar">
-          <div className="ev-brand">
-            <div className="ev-logo" />
-            <div>
-              <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Plataforma académica</div>
-            </div>
-          </div>
-        </div>
-
-        <Banner notice={notice} error={error} />
-
-        <div className="ev-card" style={{ marginTop: 14 }}>
-          <div className="ev-card-h">
-            <div>
-              <div className="ev-card-t">Entrar a E-Vantis</div>
-              <div className="ev-card-d">
-                {authMode === "register"
-                  ? "Crea tu cuenta y comienza en plan Free."
-                  : "Inicia sesión para generar clases y guardar tu progreso."}
+    if (!token) {
+      return (
+        <div className="ev-wrap">
+          <div className="ev-topbar">
+            <div className="ev-brand">
+              <div className="ev-logo" />
+              <div>
+                <div className="ev-title">E-Vantis</div>
+                <div className="ev-sub">Plataforma académica</div>
               </div>
             </div>
-            <div className="ev-row">
-              <button className="ev-btn" type="button" onClick={() => setAuthMode("login")}>
-                Login
-              </button>
-              <button className="ev-btn ev-btn-primary" type="button" onClick={() => setAuthMode("register")}>
-                Crear cuenta
-              </button>
-            </div>
           </div>
 
-          <div className="ev-card-b">
-            <div className="ev-row" style={{ gap: 12 }}>
-              <div style={{ flex: 1 }}>
-                <div className="ev-field">
-                  <label className="ev-label">Email</label>
-                  <input
-                    className="ev-input"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    placeholder="tu@email.com"
-                    autoComplete="email"
-                  />
+          <Banner notice={notice} error={error} />
+
+          {/* SCREEN: RECOVER */}
+          {authMode === "recover" && (
+            <RequestResetScreen
+              API_BASE={API_BASE}
+              email={email}
+              setEmail={setEmail}
+            />
+          )}
+
+          {/* SCREEN: LOGIN / REGISTER */}
+          {authMode !== "recover" && (
+            <div className="ev-card" style={{ marginTop: 14 }}>
+              <div className="ev-card-h">
+                <div>
+                  <div className="ev-card-t">Entrar a E-Vantis</div>
+                  <div className="ev-card-d">
+                    {authMode === "register"
+                      ? "Crea tu cuenta y comienza en plan Free."
+                      : "Inicia sesión para generar clases y guardar tu progreso."}
+                  </div>
+                </div>
+
+                <div className="ev-row">
+                  <button
+                    className="ev-btn"
+                    type="button"
+                    onClick={() => setAuthMode("login")}
+                  >
+                    Login
+                  </button>
+
+                  <button
+                    className="ev-btn ev-btn-primary"
+                    type="button"
+                    onClick={() => setAuthMode("register")}
+                  >
+                    Crear cuenta
+                  </button>
                 </div>
               </div>
-              <div style={{ flex: 1 }}>
-                <div className="ev-field">
-                  <label className="ev-label">Password</label>
-                  <input
-                    className="ev-input"
-                    type="password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    autoComplete={authMode === "register" ? "new-password" : "current-password"}
-                  />
+
+              <div className="ev-card-b">
+                <div className="ev-row" style={{ gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div className="ev-field">
+                      <label className="ev-label">Email</label>
+                      <input
+                        className="ev-input"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        placeholder="tu@email.com"
+                        autoComplete="email"
+                      />
+                    </div>
+                  </div>
+
+                  <div style={{ flex: 1 }}>
+                    <div className="ev-field">
+                      <label className="ev-label">Password</label>
+                      <input
+                        className="ev-input"
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        autoComplete={
+                          authMode === "register"
+                            ? "new-password"
+                            : "current-password"
+                        }
+                      />
+                    </div>
+                  </div>
                 </div>
+
+                <div className="ev-row" style={{ marginTop: 10 }}>
+                  <button
+                    className="ev-btn ev-btn-primary"
+                    onClick={
+                      authMode === "register"
+                        ? handleRegister
+                        : handleLogin
+                    }
+                  >
+                    {authMode === "register"
+                      ? "Crear cuenta"
+                      : "Iniciar sesión"}
+                  </button>
+
+                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                    Al continuar aceptas uso académico. No sustituye juicio clínico.
+                  </div>
+                </div>
+
+                {/* Recuperar */}
+                {authMode === "login" && (
+                  <div
+                    className="ev-row"
+                    style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}
+                  >
+                    <button
+                      className="ev-btn"
+                      type="button"
+                      onClick={() => setAuthMode("recover")}
+                    >
+                      ¿Olvidaste tu contraseña o usuario?
+                    </button>
+                  </div>
+                )}
+
+                {/* Reenviar verificación SOLO si aplica */}
+                {authMode === "login" &&
+                  /no verificado|verificad/i.test(String(error || "")) &&
+                  (email || "").trim() && (
+                    <div
+                      className="ev-row"
+                      style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}
+                    >
+                      <button
+                        className="ev-btn"
+                        type="button"
+                        onClick={handleResendVerification}
+                      >
+                        Reenviar verificación
+                      </button>
+                    </div>
+                  )}
               </div>
             </div>
-
-            <div className="ev-row" style={{ marginTop: 10 }}>
-              <button className="ev-btn ev-btn-primary" onClick={authMode === "register" ? handleRegister : handleLogin}>
-                {authMode === "register" ? "Crear cuenta" : "Iniciar sesión"}
-              </button>
-              <div className="ev-muted" style={{ fontSize: 12 }}>
-                Al continuar aceptas uso académico. No sustituye juicio clínico.
-              </div>
-            </div>
-            <div className="ev-row" style={{ marginTop: 10, gap: 10, flexWrap: "wrap" }}>
-              <button className="ev-btn" type="button" onClick={handleResendVerification}>
-                Reenviar verificación
-              </button>
-            </div>
-          </div>
+          )}
         </div>
-
-        <div className="ev-muted" style={{ marginTop: 14, fontSize: 12 }}>
-          E-Vantis — Plataforma académica. Si tienes problemas, recarga y vuelve a iniciar sesión.
-        </div>
-      </div>
-    );
-  }
+      );
+    }
 
   /* =========================
      APP SHELL (logueado)
@@ -2338,7 +2499,7 @@ function MainApp() {
       </div>
     </div>
   );
-}
+ }
 
 export default function AppRouter() {
   const pathname = (window.location.pathname || "").replace(/\/$/, "").toLowerCase();
