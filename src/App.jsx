@@ -780,6 +780,9 @@ function ResetPasswordScreen({ API_BASE }) {
       setError("");
       setNotice("Contraseña actualizada ✅ Redirigiendo…");
 
+      // ✅ FIX (Opción A): matar sesión local para evitar 401 en /auth/me y /usage/me
+      try { localStorage.removeItem(LS_TOKEN); } catch {}
+
       // IMPORTANTÍSIMO: mata el token del URL para que al re-abrir no vuelva a mostrar reset
       try {
         const url = new URL(window.location.href);
@@ -1244,17 +1247,36 @@ function MainApp() {
   // USAGE
   // =========================
   async function fetchUsage(currentToken) {
+    if (!currentToken) {
+      setUsage(null);
+      return;
+    }
+
     try {
       const res = await fetch(`${API_BASE}/usage/me`, {
         headers: {
           Authorization: `Bearer ${currentToken}`,
         },
       });
+
+      // ✅ FIX: si el backend revocó esta sesión, limpiamos TODO (igual que fetchMe)
+      if (res.status === 401) {
+        setToken("");
+        setMe(null);
+        setUsage(null);
+        setNotice("");
+        setError("Tu sesión fue revocada o expiró. Inicia sesión de nuevo.");
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        return;
+      }
+
       if (!res.ok) return;
+
       const data = await res.json();
       setUsage(data);
     } catch {}
   }
+
 
   useEffect(() => {
     if (!token) return;
@@ -1541,6 +1563,7 @@ function MainApp() {
     // 1) Corta sesión en memoria
     setToken("");
     setMe(null);
+    setUsage(null);
 
     // 2) Limpia token persistido INMEDIATO (evita re-login fantasma)
     try {
@@ -1831,6 +1854,12 @@ function MainApp() {
         const detailRaw = data?.detail ?? data?.message ?? rawText ?? `HTTP ${res.status}`;
         const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw, null, 2);
         throw new Error(`Chat error ${res.status}: ${detail}`);
+      }
+
+      if (res.status === 401) {
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        setToken(""); setMe(null); setUsage(null);
+        throw new Error("Sesión expirada. Inicia sesión de nuevo.");
       }
 
       const answer = ((data?.response ?? "") + "").trim() || "(Sin respuesta)";
