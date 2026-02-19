@@ -2285,12 +2285,12 @@ function MainApp() {
 
           {!hasPro ? (
             <>
-              <button className="ev-btn ev-btn-cta" onClick={() => startCheckout("pro")}>
+              <button className="ev-btn ev-btn-pro" onClick={() => startCheckout("pro")}>
                 Upgrade Pro
               </button>
 
-              <button className="ev-btn" onClick={() => startCheckout("premium")}>
-                Premium
+              <button className="ev-btn ev-btn-cta" onClick={() => startCheckout("premium")}>
+                Upgrade Premium
               </button>
             </>
           ) : (
@@ -2496,9 +2496,6 @@ function MainApp() {
               <div className="ev-row">
                 <button className="ev-btn" onClick={handleSaveCurrent} disabled={!result}>
                   Guardar
-                </button>
-                <button className="ev-btn ev-btn-cta" onClick={handleDownloadPDFInstitutional} disabled={!hasPro || !result}>
-                  PDF (Pro/Premium)
                 </button>
               </div>
             </div>
