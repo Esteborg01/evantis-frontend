@@ -2288,7 +2288,6 @@ function MainApp() {
               <button className="ev-btn ev-btn-pro" onClick={() => startCheckout("pro")}>
                 Upgrade Pro
               </button>
-
               <button className="ev-btn ev-btn-cta" onClick={() => startCheckout("premium")}>
                 Upgrade Premium
               </button>
