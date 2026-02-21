@@ -437,7 +437,14 @@ function buildSectionedHTML(md = "") {
 
     const hint = doc.createElement("div");
     hint.setAttribute("class", "ev-section-hint");
-    hint.textContent = "Click para plegar/abrir";
+
+    // estado inicial
+    hint.textContent = details.open ? "Ocultar sección" : "Mostrar sección";
+
+    // actualizar cuando se abra/cierre
+    details.addEventListener("toggle", () => {
+      hint.textContent = details.open ? "Ocultar sección" : "Mostrar sección";
+    });
 
     summary.appendChild(titleRow);
     summary.appendChild(hint);
