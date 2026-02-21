@@ -405,7 +405,7 @@ function buildSectionedHTML(md = "") {
     card.style.paddingLeft = "10px";
 
     const details = doc.createElement("details");
-    details.setAttribute("open", "open");
+    // Por defecto cerrado (no seteamos open)
 
     const summary = doc.createElement("summary");
     summary.setAttribute("class", "ev-section-h");
