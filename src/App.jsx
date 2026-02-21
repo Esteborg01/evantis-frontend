@@ -441,10 +441,11 @@ function buildSectionedHTML(md = "") {
     // estado inicial
     hint.textContent = details.open ? "Ocultar sección" : "Mostrar sección";
 
-    // actualizar cuando se abra/cierre
-    details.addEventListener("toggle", () => {
-      hint.textContent = details.open ? "Ocultar sección" : "Mostrar sección";
-    });
+    // ✅ inline handler (sobrevive si el DOM se serializa con innerHTML)
+    details.setAttribute(
+      "ontoggle",
+      "const h=this.querySelector('.ev-section-hint'); if(h){h.textContent=this.open?'Ocultar sección':'Mostrar sección';}"
+    );
 
     summary.appendChild(titleRow);
     summary.appendChild(hint);
