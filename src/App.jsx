@@ -89,8 +89,8 @@ function humanLabelModule(m) {
     ? "Clase"
     : m === "exam"
     ? "Examen"
-    : m === "enarm"
-    ? "Caso ENARM"
+    : m === "exam_clinico"
+    ? "Caso clínico avanzado"
     : m === "gpc_summary"
     ? "Resumen GPC"
     : m;
@@ -235,7 +235,7 @@ const BADGE_LABELS = {
   concepto_clave: "Concepto clave",
   red_flag: "Red flag",
   error_frecuente: "Error frecuente",
-  enfoque_enarm: "Enfoque ENARM",
+  enfoque_exam_clinico: "Enfoque clínico",
 };
 
 function parseLeadingBadges(title = "") {
@@ -1104,7 +1104,7 @@ function MainApp() {
   const [durationMinutes, setDurationMinutes] = useState(25);
   const [style, setStyle] = useState("magistral");
   const [useGuides, setUseGuides] = useState(false);
-  const [enarmContext, setEnarmContext] = useState(false);
+  const [examClinicoContext, setExamClinicoContext] = useState(false);
   const [numQuestions, setNumQuestions] = useState(10);
   const [advancedOpen, setAdvancedOpen] = useState(false);
 
@@ -1168,9 +1168,9 @@ function MainApp() {
   const moduleOptions = useMemo(() => {
     let base;
     if (npmProfile === "basicas") base = ["lesson", "exam"];
-    else if (npmProfile === "puente") base = ["lesson", "exam", "enarm"];
-    else if (npmProfile === "clinicas") base = ["lesson", "exam", "enarm", "gpc_summary"];
-    else base = ["lesson", "exam", "enarm", "gpc_summary"];
+    else if (npmProfile === "puente") base = ["lesson", "exam", "exam_clinico"];
+    else if (npmProfile === "clinicas") base = ["lesson", "exam", "exam_clinico", "gpc_summary"];
+    else base = ["lesson", "exam", "exam_clinico", "gpc_summary"];
     if (!hasPro) base = base.filter((x) => x !== "gpc_summary");
     return base;
   }, [npmProfile, hasPro]);
@@ -1596,18 +1596,19 @@ function MainApp() {
     if (selectedTopic?.subtopics?.length > 0 && !subtopicId) return "Selecciona un Subtema.";
     if (!module) return "Selecciona qué quieres generar.";
 
-    if (npmProfile === "basicas" && (module === "enarm" || module === "gpc_summary")) {
-      return "Materia básica: ENARM y Resumen GPC no están disponibles.";
+    if (npmProfile === "basicas" && (module === "exam_clinico" || module === "gpc_summary")) {
+      return "Materia básica: Caso clínico avanzado y Resumen GPC no están disponibles.";
     }
     if (module === "gpc_summary" && !hasPro) return "Resumen GPC disponible solo en Pro/Premium.";
 
-    if (module === "enarm" && !enarmContext) return "Para ENARM debes confirmar el modo ENARM (check).";
+    if (module === "exam_clinico" && !examClinicoContext) return "Para Caso clínico avanzado debes confirmar el modo clínico (check).";
     if (module === "gpc_summary" && !useGuides) return "Resumen GPC requiere usar guías actualizadas.";
     if (Number(durationMinutes) < 5 || Number(durationMinutes) > 120) return "Duración inválida (5–120 min recomendado).";
-    if (module === "enarm" || module === "exam") {
+    if (module === "exam_clinico" || module === "exam") {
       if (Number(numQuestions) < 5 || Number(numQuestions) > 200) return "Número de preguntas inválido (5–200).";
     }
     return "";
+
   }
 
   async function handleGenerate() {
@@ -1634,8 +1635,8 @@ function MainApp() {
         duration_minutes: Number(durationMinutes),
         style: module === "lesson" ? style : undefined,
         use_guides: module === "gpc_summary" ? true : useGuides || undefined,
-        enarm_context: module === "enarm" ? true : enarmContext || undefined,
-        num_questions: module === "exam" || module === "enarm" ? Number(numQuestions) : undefined,
+        exam_clinico_context: module === "exam_clinico" ? true : (examClinicoContext || undefined),
+        num_questions: (module === "exam" || module === "exam_clinico") ? Number(numQuestions) : undefined,
       };
       Object.keys(payload).forEach((k) => payload[k] === undefined && delete payload[k]);
 
@@ -1702,7 +1703,7 @@ function MainApp() {
       }
 
       const session_id = data?.session_id || `sess_${Math.random().toString(16).slice(2)}`;
-      const content = data?.lesson || data?.exam || data?.enarm || data?.gpc_summary || "";
+      const content = data?.lesson || data?.exam || data?.exam_clinico || data?.gpc_summary || "";
 
       const normalized = {
         session_id,
@@ -2273,7 +2274,7 @@ function MainApp() {
           <div className="ev-logo" />
           <div>
             <div className="ev-title">E-Vantis</div>
-            <div className="ev-sub">Clases • Exámenes • Casos ENARM • Guardadas • Chat</div>
+            <div className="ev-sub">Clases • Exámenes • Casos Clínicos Avanzados • Guardadas • Chat</div>
           </div>
         </div>
         
@@ -2310,8 +2311,7 @@ function MainApp() {
             <div>
               <div className="ev-card-t">Uso mensual</div>
               <div className="ev-card-d">
-                lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · enarm{" "}
-                {usage.modules.enarm.used}/{usage.modules.enarm.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
+                lesson {usage.modules.lesson.used}/{usage.modules.lesson.limit} · exam {usage.modules.exam.used}/{usage.modules.exam.limit} · caso clínico {usage.modules.exam_clinico.used}/{usage.modules.exam_clinico.limit} · gpc {usage.modules.gpc_summary.used}/{usage.modules.gpc_summary.limit}
               </div>
             </div>
 
@@ -2447,7 +2447,7 @@ function MainApp() {
                     onChange={(e) => setNumQuestions(e.target.value)}
                     min={5}
                     max={200}
-                    disabled={!(module === "exam" || module === "enarm")}
+                    disabled={!(module === "exam" || module === "exam_clinico")}
                   />
                 </div>
               </div>
@@ -2467,8 +2467,12 @@ function MainApp() {
                 </label>
 
                 <label className="ev-row" style={{ gap: 10 }}>
-                  <input type="checkbox" checked={enarmContext} onChange={(e) => setEnarmContext(e.target.checked)} />
-                  <span style={{ fontSize: 13 }}>Confirmo modo ENARM</span>
+                  <input
+                    type="checkbox"
+                    checked={examClinicoContext}
+                    onChange={(e) => setExamClinicoContext(e.target.checked)}
+                  />
+                  <span style={{ fontSize: 13 }}>Confirmo modo clínico</span>
                 </label>
               </div>
             )}
@@ -2617,7 +2621,7 @@ function MainApp() {
                   <option value="all">Módulo</option>
                   <option value="lesson">Clase</option>
                   <option value="exam">Examen</option>
-                  <option value="enarm">Caso ENARM</option>
+                  <option value="exam_clinico">Caso Clínico Avanzado</option>
                   <option value="gpc_summary">Resumen GPC</option>
                 </select>
 
