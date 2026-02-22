@@ -1011,6 +1011,25 @@ function MainApp() {
     } catch {}
   }
 
+  useEffect(() => {
+    try {
+      const host = (window.location.hostname || "").toLowerCase();
+
+      // ✅ Si por cualquier razón el usuario cae en onrender, lo mandamos al dominio real
+      const isOnRender = host.endsWith("onrender.com");
+      const canonical = "app.e-vantis.com";
+
+      if (isOnRender) {
+        const url = new URL(window.location.href);
+        url.hostname = canonical;
+        url.protocol = "https:";
+        // si tu app usa otro puerto en dev, no lo forces aquí (esto es prod)
+        url.port = "";
+        window.location.replace(url.toString());
+      }
+    } catch {}
+  }, []);
+
   // =========================
   // UI
   // =========================
@@ -1221,35 +1240,46 @@ function MainApp() {
       else setAuthMode("login");
     } catch {}
   }, []);
-   
-  useEffect(() => {
-    try {
-      const qs = new URLSearchParams(window.location.search || "");
-      const success = (qs.get("success") || "").trim();
-      const canceled = (qs.get("canceled") || "").trim();
 
-      if (!success && !canceled) return;
-
-      if (success) setNotice("Pago completado. Actualizando plan…");
-      if (canceled) setNotice("Pago cancelado.");
-
-      // refrescar me/usage (plan puede haber cambiado)
-      const tkn = localStorage.getItem(LS_TOKEN) || token;
-      if (tkn) {
-        fetchMe(tkn);
-        fetchUsage(tkn);
-      }
-
-      // limpiar params para no repetir al refresh
+   useEffect(() => {
       try {
-        const url = new URL(window.location.href);
-        url.searchParams.delete("success");
-        url.searchParams.delete("canceled");
-        window.history.replaceState({}, "", url.toString());
+        const qs = new URLSearchParams(window.location.search || "");
+
+        // ✅ nuevo (tu backend actual)
+        const billing = (qs.get("billing") || "").trim().toLowerCase(); // success | cancel
+        const sessionId = (qs.get("session_id") || "").trim();
+
+        // ✅ legacy (por si algún link viejo existía)
+        const successLegacy = (qs.get("success") || "").trim();
+        const canceledLegacy = (qs.get("canceled") || "").trim();
+
+        const isSuccess = billing === "success" || !!successLegacy;
+        const isCancel = billing === "cancel" || !!canceledLegacy;
+
+        if (!isSuccess && !isCancel) return;
+
+        if (isSuccess) setNotice("Pago completado. Actualizando plan…");
+        if (isCancel) setNotice("Pago cancelado.");
+
+        // refrescar me/usage (plan puede haber cambiado)
+        const tkn = localStorage.getItem(LS_TOKEN) || token;
+        if (tkn) {
+          fetchMe(tkn);
+          fetchUsage(tkn);
+        }
+
+        // limpiar params para no repetir al refresh
+        try {
+          const url = new URL(window.location.href);
+          url.searchParams.delete("billing");
+          url.searchParams.delete("session_id");
+          url.searchParams.delete("success");
+          url.searchParams.delete("canceled");
+          window.history.replaceState({}, "", url.toString());
+        } catch {}
       } catch {}
-    } catch {}
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
   // =========================
   // USAGE
@@ -1350,16 +1380,19 @@ function MainApp() {
     setNotice("");
 
     try {
-      const tkn = localStorage.getItem(LS_TOKEN);
+      const tkn = localStorage.getItem(LS_TOKEN) || token;
       if (!tkn) throw new Error("No hay sesión activa.");
       if (!API_KEY) throw new Error("Falta VITE_API_KEY en el frontend.");
 
-      const res = await fetch(`${API_BASE}/billing/checkout`, {
+      setNotice("Redirigiendo a pago seguro…");
+
+      const res = await fetch(`${API_BASE}${BILLING_CHECKOUT_PATH}`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "X-API-Key": API_KEY,
           Authorization: `Bearer ${tkn}`,
+          "Idempotency-Key": makeIdempotencyKey("checkout"),
         },
         body: JSON.stringify({ plan: planSlug }), // "pro" | "premium"
       });
@@ -1370,11 +1403,12 @@ function MainApp() {
         throw new Error(detail);
       }
 
-      const url = (data?.url || "").trim();
+      const url = String(data?.url || "").trim();
       if (!url) throw new Error("Checkout no devolvió URL.");
 
       window.location.href = url;
     } catch (e) {
+      setNotice("");
       setError(e?.message || "No se pudo iniciar checkout.");
     }
   }
@@ -1427,6 +1461,44 @@ function MainApp() {
       setNotice("");
       setError(e?.message || "Error abriendo portal.");
     }
+  }
+
+  async function goCheckout(plan) {
+    const token = localStorage.getItem("evantis_token");
+    if (!token) throw new Error("No auth token");
+
+    const r = await fetch(`${API_BASE}/billing/checkout`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ plan }), // "pro" o "premium"
+    });
+
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.detail || "Checkout failed");
+
+    window.location.href = data.url; // Stripe Checkout
+  }
+
+  async function goPortal() {
+    const token = localStorage.getItem("evantis_token");
+    if (!token) throw new Error("No auth token");
+
+    const r = await fetch(`${API_BASE}/billing/portal`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ return_url: window.location.origin + "/" }),
+    });
+
+    const data = await r.json();
+    if (!r.ok) throw new Error(data?.detail || "Portal failed");
+
+    window.location.href = data.url; // Stripe Portal
   }
 
   // === LOGIN (OAuth2PasswordRequestForm: x-www-form-urlencoded) ===
