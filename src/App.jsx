@@ -15,6 +15,14 @@ const AUTH_REGISTER_PATH = "/auth/register";
 const AUTH_ME_PATH = "/auth/me";
 const TEACH_CURRICULUM_PATH = "/teach/curriculum";
 
+const AUTH_ACCEPT_TERMS_PATH = "/auth/accept-terms";
+
+// ✅ versionado de términos (igual que tu curl)
+const TERMS_VERSION = "2026-02-20";
+
+// ✅ URL pública donde están los términos
+const TERMS_URL = "https://terminos.e-vantis.com"; // <-- cámbialo por tu URL real
+
 // Billing (Stripe)
 const BILLING_CHECKOUT_PATH = "/billing/checkout";
 const BILLING_PORTAL_PATH = "/billing/portal";
@@ -82,6 +90,57 @@ function setChatForSession(session_id, messages) {
 
 function nowISO() {
   return new Date().toISOString();
+}
+
+async function apiAuthMe(API_BASE, token) {
+  const res = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  const raw = await res.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+
+  if (res.status === 401) {
+    const err = new Error("UNAUTHORIZED");
+    err.status = 401;
+    throw err;
+  }
+  if (!res.ok) {
+    const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+    const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+    throw new Error(detail || "No se pudo cargar /auth/me");
+  }
+
+  return data || {};
+}
+
+async function apiAcceptTerms(API_BASE, token, terms_version) {
+  const res = await fetch(`${API_BASE}${AUTH_ACCEPT_TERMS_PATH}`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ terms_version }),
+  });
+
+  const raw = await res.text();
+  let data = null;
+  try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+
+  if (res.status === 401) {
+    const err = new Error("UNAUTHORIZED");
+    err.status = 401;
+    throw err;
+  }
+  if (!res.ok) {
+    const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
+    const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
+    throw new Error(detail || "No se pudo aceptar términos");
+  }
+
+  return data || {};
 }
 
 function humanLabelModule(m) {
@@ -523,6 +582,63 @@ function Banner({ notice, error }) {
           {notice}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+function TermsModal({
+  open,
+  busy,
+  checked,
+  setChecked,
+  error,
+  onOpenTerms,
+  onAccept,
+}) {
+  if (!open) return null;
+
+  return (
+    <div className="ev-modal-backdrop">
+      <div className="ev-modal">
+        <div style={{ fontWeight: 900, fontSize: 18 }}>Términos y Condiciones</div>
+
+        <div className="ev-muted" style={{ marginTop: 8, lineHeight: 1.4 }}>
+          Para continuar usando E-Vantis debes aceptar los Términos y Condiciones.
+        </div>
+
+        <div className="ev-row" style={{ marginTop: 12, gap: 10, flexWrap: "wrap" }}>
+          <button className="ev-btn" type="button" onClick={onOpenTerms} disabled={busy}>
+            Leer términos
+          </button>
+        </div>
+
+        <label className="ev-row" style={{ gap: 10, marginTop: 12, alignItems: "center" }}>
+          <input
+            type="checkbox"
+            checked={checked}
+            onChange={(e) => setChecked(e.target.checked)}
+            disabled={busy}
+          />
+          <span style={{ fontSize: 13 }}>Acepto los Términos y Condiciones (versión {TERMS_VERSION})</span>
+        </label>
+
+        {error ? (
+          <div className="ev-alert err" style={{ marginTop: 12 }}>
+            <span className="k">Error:</span> {error}
+          </div>
+        ) : null}
+
+        <div className="ev-row" style={{ marginTop: 14 }}>
+          <button
+            className="ev-btn ev-btn-primary"
+            type="button"
+            onClick={onAccept}
+            disabled={!checked || busy}
+          >
+            {busy ? "Aceptando…" : "Aceptar y continuar"}
+          </button>
+        </div>
+      </div>
     </div>
   );
 }
@@ -970,6 +1086,14 @@ function MainApp() {
   const [authMode, setAuthMode] = useState("login"); // "login" | "register" | "recover"
   const [authStatus, setAuthStatus] = useState("");
 
+  // =========================
+  // TERMS
+  // =========================
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsChecked, setTermsChecked] = useState(false);
+  const [termsBusy, setTermsBusy] = useState(false);
+  const [termsErr, setTermsErr] = useState("");
+
   async function readJsonSafe(resp) {
     try {
       return await resp.json();
@@ -990,25 +1114,28 @@ function MainApp() {
       setMe(null);
       return;
     }
-    try {
-      const res = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${currentToken}`,
-        },
-      });
 
-      if (res.status === 401) {
+    try {
+      const data = await apiAuthMe(API_BASE, currentToken);
+      setMe(data);
+
+      const accepted = !!data?.accepted_terms;
+      if (!accepted) {
+        setTermsErr("");
+        setTermsChecked(false);
+        setTermsOpen(true); // 🔒 bloquea uso hasta aceptar
+      } else {
+        setTermsOpen(false);
+      }
+    } catch (e) {
+      if (e?.status === 401 || e?.message === "UNAUTHORIZED") {
         setToken("");
         setMe(null);
         try { localStorage.removeItem(LS_TOKEN); } catch {}
         return;
       }
-
-      if (!res.ok) return;
-      const data = await res.json();
-      setMe(data);
-    } catch {}
+      // no rompas UI por fallas no críticas
+    }
   }
 
   useEffect(() => {
@@ -1325,6 +1452,54 @@ function MainApp() {
   // ACTIONS
   // =========================
   // Helpers (opcional)
+  function openTermsPage() {
+    try {
+      window.open(TERMS_URL, "_blank", "noopener,noreferrer");
+    } catch {
+      window.location.href = TERMS_URL;
+    }
+  }
+
+  async function handleAcceptTerms() {
+    setTermsErr("");
+
+    const tkn = localStorage.getItem(LS_TOKEN) || token;
+    if (!tkn) {
+      setTermsErr("Sesión inválida. Inicia sesión de nuevo.");
+      return;
+    }
+    if (!termsChecked) {
+      setTermsErr("Debes marcar la casilla para continuar.");
+      return;
+    }
+
+    try {
+      setTermsBusy(true);
+      await apiAcceptTerms(API_BASE, tkn, TERMS_VERSION);
+
+      // refrescar me + cerrar modal si ya quedó accepted_terms=true
+      await fetchMe(tkn);
+    } catch (e) {
+      if (e?.status === 401 || e?.message === "UNAUTHORIZED") {
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        setToken(""); setMe(null); setUsage(null);
+        setTermsErr("Sesión expirada. Inicia sesión de nuevo.");
+        return;
+      }
+      setTermsErr(e?.message || "No se pudo aceptar términos.");
+    } finally {
+      setTermsBusy(false);
+    }
+  }
+
+  function ensureTermsOrOpenModal() {
+    if (!!me?.accepted_terms) return true;
+    setTermsErr("");
+    setTermsChecked(false);
+    setTermsOpen(true);
+    return false;
+  }
+
   async function handleUpgrade(planWanted = "pro") {
     setError("");
     setNotice("");
@@ -1378,6 +1553,11 @@ function MainApp() {
   async function startCheckout(planSlug) {
     setError("");
     setNotice("");
+    if (!ensureTermsOrOpenModal()) {
+      setError("Debes aceptar Términos y Condiciones para continuar.");
+      setNotice("");
+      return;
+    }
 
     try {
       const tkn = localStorage.getItem(LS_TOKEN) || token;
@@ -1416,6 +1596,11 @@ function MainApp() {
   async function handleBillingPortal() {
     setError("");
     setNotice("");
+    if (!ensureTermsOrOpenModal()) {
+      setError("Debes aceptar Términos y Condiciones para continuar.");
+      setNotice("");
+      return;
+    }
 
     if (!token) {
       setError("Inicia sesión para continuar.");
@@ -1694,6 +1879,10 @@ function MainApp() {
   async function handleGenerate() {
     setError("");
     setNotice("");
+    if (!ensureTermsOrOpenModal()) {
+      setError("Debes aceptar Términos y Condiciones para continuar.");
+      return;
+    }
 
     const validation = validateBeforeGenerate();
     if (validation) {
@@ -1891,6 +2080,11 @@ function MainApp() {
   async function handleChatSend() {
     setError("");
     setNotice("");
+    if (!ensureTermsOrOpenModal()) {
+      setChatStatus("");
+      setError("Debes aceptar Términos y Condiciones para usar el chat.");
+      return;
+    }
 
     const sid = result?.session_id;
     if (!sid) {
@@ -2384,6 +2578,16 @@ function MainApp() {
           </button>
         </div>
       </div>
+
+      <TermsModal
+        open={termsOpen}
+        busy={termsBusy}
+        checked={termsChecked}
+        setChecked={setTermsChecked}
+        error={termsErr}
+        onOpenTerms={openTermsPage}
+        onAccept={handleAcceptTerms}
+      /> 
 
       {usage?.modules && (
         <div className="ev-card" style={{ marginTop: 14 }}>

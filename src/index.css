@@ -668,3 +668,25 @@ body{
   color: #ffffff;
   box-shadow: 0 8px 24px rgba(255,255,255,0.08);
 }
+
+.ev-modal-backdrop{
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.60);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 18px;
+  z-index: 9999;
+}
+
+.ev-modal{
+  width: min(560px, 100%);
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.14);
+  border-radius: 16px;
+  padding: 18px;
+  box-shadow: 0 14px 40px rgba(0,0,0,0.35);
+  color: #fff;
+  backdrop-filter: blur(10px);
+}
