@@ -2375,7 +2375,7 @@ function MainApp() {
             </>
           ) : (
             <button className="ev-btn" onClick={handleBillingPortal}>
-              Facturación
+              Administrar Suscripción
             </button>
           )}
 
