@@ -1094,6 +1094,11 @@ function MainApp() {
   const [termsBusy, setTermsBusy] = useState(false);
   const [termsErr, setTermsErr] = useState("");
 
+  // ✅ DEBUG: permite forzar el modal desde consola
+  const forceTerms =
+    typeof window !== "undefined" &&
+    (window.__forceTerms === true || String(window.__forceTerms || "").toLowerCase() === "true");
+
   async function readJsonSafe(resp) {
     try {
       return await resp.json();
@@ -2579,8 +2584,18 @@ function MainApp() {
         </div>
       </div>
 
+      {/* ✅ DEBUG (TEMPORAL): estado TERMS visible */}
+      <div style={{ position: "fixed", bottom: 12, right: 12, zIndex: 9999999, fontSize: 12, opacity: 0.92 }}>
+        <div style={{ padding: 8, borderRadius: 10, background: "rgba(0,0,0,0.55)", border: "1px solid rgba(255,255,255,0.15)" }}>
+          <div>forceTerms: <b>{String(forceTerms)}</b></div>
+          <div>termsOpen: <b>{String(termsOpen)}</b></div>
+          <div>me.accepted_terms: <b>{String(me?.accepted_terms)}</b></div>
+          <div>token?: <b>{String(!!token)}</b></div>
+        </div>
+      </div>
+
       <TermsModal
-        open={termsOpen}
+        open={forceTerms || termsOpen}
         busy={termsBusy}
         checked={termsChecked}
         setChecked={setTermsChecked}
