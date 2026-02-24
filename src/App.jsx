@@ -977,15 +977,33 @@ function ResetPasswordScreen({ API_BASE }) {
 function AdminScreen({ API_BASE }) {
   const [notice, setNotice] = useState("Cargando dashboard…");
   const [error, setError] = useState("");
+  const [me, setMe] = useState(null);
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [retryTick, setRetryTick] = useState(0);
 
-  // helper: token SIEMPRE fresco
-  const getToken = () => (localStorage.getItem(LS_TOKEN) || "").trim();
+  // Siempre toma el token “vivo” (no lo congeles en useState)
+  const token = useMemo(() => {
+    try {
+      return localStorage.getItem(LS_TOKEN) || "";
+    } catch {
+      return "";
+    }
+  }, [retryTick]);
 
-  // helper: fetch seguro
-  async function fetchJsonSafe(url, { method = "GET", headers = {}, body } = {}) {
-    const res = await fetch(url, { method, headers, body });
+  function hardLogoutAndGoLogin() {
+    try {
+      localStorage.removeItem(LS_TOKEN);
+    } catch {}
+    window.location.replace("/?auth=login");
+  }
+
+  function goApp() {
+    window.location.replace("/");
+  }
+
+  async function readTextJson(res) {
     const raw = await res.text().catch(() => "");
     let data = null;
     try {
@@ -993,100 +1011,124 @@ function AdminScreen({ API_BASE }) {
     } catch {
       data = null;
     }
-    return { res, raw, data };
+    return { raw, data };
   }
 
-  function normalizeDetail(raw, data, fallback = "") {
-    const d = data?.detail ?? data?.message ?? raw ?? fallback;
-    return typeof d === "string" ? d : JSON.stringify(d);
-  }
-
-  async function loadAdmin() {
+  async function fetchAdmin() {
+    setBusy(true);
     setError("");
     setOverview(null);
     setUsers([]);
+    setMe(null);
 
-    const token = getToken();
     if (!token) {
       setNotice("");
       setError("No hay sesión activa. Inicia sesión primero.");
+      setBusy(false);
       return;
     }
 
-    // Si tu backend requiere X-API-Key para todo lo protegido, aquí es obligatorio.
-    if (!API_KEY) {
-      setNotice("");
-      setError("Falta VITE_API_KEY en el frontend. Sin esto, /admin/* devolverá 403.");
-      return;
-    }
-
-    setNotice("Cargando dashboard…");
-
-    const commonHeaders = {
-      Authorization: `Bearer ${token}`,
-      "X-API-Key": API_KEY,
-    };
+    setNotice("Validando sesión…");
 
     try {
-      const [r1, r2] = await Promise.all([
-        fetchJsonSafe(`${API_BASE}/admin/overview`, { headers: commonHeaders }),
-        fetchJsonSafe(`${API_BASE}/admin/users?limit=50`, { headers: commonHeaders }),
-      ]);
+      // 1) Primero /auth/me para saber quién eres y manejar 401/403
+      const rMe = await fetch(`${API_BASE}${AUTH_ME_PATH}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { raw: rawMe, data: dataMe } = await readTextJson(rMe);
 
-      // ---- overview (r1)
-      if (r1.res.status === 401) {
-        try { localStorage.removeItem(LS_TOKEN); } catch {}
+      if (rMe.status === 401) {
         setNotice("");
-        setError("Sesión expirada o revocada. Inicia sesión de nuevo.");
+        setError("Sesión expirada o inválida. Vuelve a iniciar sesión.");
+        setBusy(false);
         return;
       }
 
-      if (r1.res.status === 403) {
+      if (rMe.status === 403) {
+        // Si lo usas para gating de términos/plan, aquí lo reflejamos
+        const detail = String(dataMe?.detail || rawMe || "Acceso prohibido (403).");
         setNotice("");
-        const msg = normalizeDetail(r1.raw, r1.data, "Acceso prohibido (403).");
-
-        // Mensaje específico si el backend lo manda
-        if (/admin/i.test(msg) || /rol/i.test(msg)) {
-          setError("Requiere rol admin.");
-        } else if (/api[-\s]*key|x-api-key/i.test(msg)) {
-          setError("Falta o es inválida la X-API-Key en el request.");
-        } else {
-          setError(msg);
-        }
+        setError(detail);
+        setBusy(false);
         return;
       }
 
-      if (!r1.res.ok) {
-        setNotice("");
-        setError(normalizeDetail(r1.raw, r1.data, `HTTP ${r1.res.status}`));
-        return;
+      if (!rMe.ok) {
+        const detail = String(dataMe?.detail || rawMe || `HTTP ${rMe.status}`);
+        throw new Error(detail);
       }
 
-      setOverview(r1.data || {});
+      setMe(dataMe || {});
+      setNotice("Cargando métricas…");
 
-      // ---- users (r2) (si falla NO tumba todo)
-      if (r2.res.ok) {
-        const items = Array.isArray(r2.data?.items) ? r2.data.items : [];
-        setUsers(items);
-      } else if (r2.res.status === 401) {
-        // si users da 401, tratamos igual como sesión expirada
-        try { localStorage.removeItem(LS_TOKEN); } catch {}
+      // 2) /admin/overview
+      const r1 = await fetch(`${API_BASE}/admin/overview`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { raw: t1, data: j1 } = await readTextJson(r1);
+
+      if (r1.status === 401) {
         setNotice("");
-        setError("Sesión expirada o revocada. Inicia sesión de nuevo.");
+        setError("Sesión expirada o inválida. Vuelve a iniciar sesión.");
+        setBusy(false);
         return;
+      }
+      if (r1.status === 403) {
+        const detail = String(j1?.detail || t1 || "Requiere rol admin.");
+        setNotice("");
+        setError(detail);
+        setBusy(false);
+        return;
+      }
+      if (!r1.ok) {
+        const detail = String(j1?.detail || t1 || `HTTP ${r1.status}`);
+        throw new Error(detail);
+      }
+
+      setOverview(j1);
+
+      // 3) /admin/users
+      setNotice("Cargando usuarios…");
+      const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      const { raw: t2, data: j2 } = await readTextJson(r2);
+
+      if (r2.status === 401) {
+        setNotice("");
+        setError("Sesión expirada o inválida. Vuelve a iniciar sesión.");
+        setBusy(false);
+        return;
+      }
+      if (r2.status === 403) {
+        const detail = String(j2?.detail || t2 || "Requiere rol admin.");
+        setNotice("");
+        setError(detail);
+        setBusy(false);
+        return;
+      }
+      if (r2.ok) {
+        setUsers(Array.isArray(j2?.items) ? j2.items : []);
       }
 
       setNotice("");
     } catch (e) {
       setNotice("");
       setError(e?.message || "No se pudo cargar admin.");
+    } finally {
+      setBusy(false);
     }
   }
 
   useEffect(() => {
-    loadAdmin();
+    fetchAdmin();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [API_BASE]);
+  }, [API_BASE, retryTick]);
+
+  const who =
+    me?.email
+      ? `Sesión: ${me.email}${me?.plan ? ` · Plan: ${me.plan}` : ""}`
+      : "";
 
   return (
     <div className="ev-wrap">
@@ -1100,18 +1142,34 @@ function AdminScreen({ API_BASE }) {
         </div>
 
         <div className="ev-row">
-          <button className="ev-btn" onClick={() => window.location.replace("/")}>
+          <button className="ev-btn" onClick={goApp}>
             Volver a la app
           </button>
-          <button className="ev-btn" onClick={loadAdmin}>
-            Reintentar
+
+          <button
+            className="ev-btn"
+            onClick={() => setRetryTick((x) => x + 1)}
+            disabled={busy}
+          >
+            {busy ? "Cargando…" : "Reintentar"}
+          </button>
+
+          <button className="ev-btn" onClick={hardLogoutAndGoLogin}>
+            Login
           </button>
         </div>
       </div>
 
+      {who ? (
+        <div className="ev-muted" style={{ marginTop: 10, fontSize: 12 }}>
+          {who}
+        </div>
+      ) : null}
+
       <Banner notice={notice} error={error} />
 
-      {overview ? (
+      {/* Si no hay error y ya cargó overview */}
+      {!error && overview ? (
         <div className="ev-grid" style={{ marginTop: 14 }}>
           <div className="ev-card">
             <div className="ev-card-h">
@@ -1159,10 +1217,17 @@ function AdminScreen({ API_BASE }) {
         </div>
       ) : null}
 
-      {import.meta.env.DEV ? (
-        <div className="ev-muted" style={{ marginTop: 12, fontSize: 12 }}>
-          Debug: API_BASE={API_BASE} · token? {String(!!(localStorage.getItem(LS_TOKEN) || ""))} · API_KEY?{" "}
-          {String(!!API_KEY)}
+      {/* Si el error es "Requiere rol admin", damos hint operable */}
+      {error && /rol\s*admin/i.test(error) ? (
+        <div className="ev-card" style={{ marginTop: 14 }}>
+          <div className="ev-card-b">
+            <div style={{ fontWeight: 900, marginBottom: 6 }}>Acceso restringido</div>
+            <div className="ev-muted" style={{ fontSize: 12, lineHeight: 1.5 }}>
+              Tu sesión actual no está autorizada como admin. Verifica que el email con el que iniciaste sesión
+              esté incluido en <b>ADMIN_EMAILS</b> del backend y que el backend compare contra el mismo campo (email)
+              que devuelve <code>/auth/me</code>.
+            </div>
+          </div>
         </div>
       ) : null}
     </div>
