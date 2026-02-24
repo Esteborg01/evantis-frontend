@@ -106,6 +106,14 @@ async function apiAuthMe(API_BASE, token) {
     err.status = 401;
     throw err;
   }
+    // ✅ PATCH 2: 403 en /auth/me lo usamos para gating (no logout)
+  if (res.status === 403) {
+    const err = new Error("FORBIDDEN");
+    err.status = 403;
+    // Pasamos detalle para decidir si es términos/plan/otro
+    err.detail = typeof (data?.detail) === "string" ? data.detail : (raw || "403");
+    throw err;
+  }
   if (!res.ok) {
     const detailRaw = data?.detail ?? raw ?? `HTTP ${res.status}`;
     const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw);
@@ -777,6 +785,126 @@ function ResetPasswordScreen({ API_BASE }) {
     })();
   }, [API_BASE, tokenQ]);
 
+  function AdminScreen({ API_BASE }) {
+    const [token] = useState(localStorage.getItem(LS_TOKEN) || "");
+    const [notice, setNotice] = useState("Cargando dashboard…");
+    const [error, setError] = useState("");
+    const [overview, setOverview] = useState(null);
+    const [users, setUsers] = useState([]);
+
+    useEffect(() => {
+      (async () => {
+        try {
+          setError("");
+          if (!token) {
+            setNotice("");
+            setError("No hay sesión. Inicia sesión primero.");
+            return;
+          }
+
+          // Overview
+          const r1 = await fetch(`${API_BASE}/admin/overview`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const t1 = await r1.text();
+          let j1 = null;
+          try { j1 = t1 ? JSON.parse(t1) : null; } catch { j1 = null; }
+
+          if (!r1.ok) {
+            const detail = j1?.detail || t1 || `HTTP ${r1.status}`;
+            throw new Error(detail);
+          }
+          setOverview(j1);
+
+          // Users
+          const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          const t2 = await r2.text();
+          let j2 = null;
+          try { j2 = t2 ? JSON.parse(t2) : null; } catch { j2 = null; }
+          if (r2.ok) setUsers(Array.isArray(j2?.items) ? j2.items : []);
+
+          setNotice("");
+        } catch (e) {
+          setNotice("");
+          setError(e?.message || "No se pudo cargar admin.");
+        }
+      })();
+    }, [API_BASE, token]);
+
+    return (
+      <div className="ev-wrap">
+        <div className="ev-topbar">
+          <div className="ev-brand">
+            <div className="ev-logo" />
+            <div>
+              <div className="ev-title">E-Vantis</div>
+              <div className="ev-sub">Admin</div>
+            </div>
+          </div>
+
+          <div className="ev-row">
+            <button className="ev-btn" onClick={() => window.location.replace("/")}>
+              Volver a la app
+            </button>
+          </div>
+        </div>
+
+        <Banner notice={notice} error={error} />
+
+        {overview ? (
+          <div className="ev-grid" style={{ marginTop: 14 }}>
+            <div className="ev-card">
+              <div className="ev-card-h">
+                <div>
+                  <div className="ev-card-t">Overview</div>
+                  <div className="ev-card-d">Estado general</div>
+                </div>
+              </div>
+              <div className="ev-card-b">
+                <div style={{ display: "grid", gap: 8 }}>
+                  <div><b>Usuarios totales:</b> {overview?.users?.total ?? "—"}</div>
+                  <div><b>Nuevos 7d:</b> {overview?.users?.new_7d ?? "—"}</div>
+                  <div><b>Uso mensual:</b> {overview?.usage_month ? JSON.stringify(overview.usage_month) : "—"}</div>
+                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                    Server time: {overview?.server_time_utc || "—"}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="ev-card">
+              <div className="ev-card-h">
+                <div>
+                  <div className="ev-card-t">Últimos usuarios</div>
+                  <div className="ev-card-d">Top 50 por fecha</div>
+                </div>
+              </div>
+
+              <div className="ev-card-b">
+                {users.length === 0 ? (
+                  <div className="ev-muted" style={{ fontSize: 12 }}>Sin datos.</div>
+                ) : (
+                  <div style={{ display: "grid", gap: 8 }}>
+                    {users.map((u) => (
+                      <div key={u.id} className="ev-card" style={{ padding: 10 }}>
+                        <div style={{ fontWeight: 800 }}>{u.email}</div>
+                        <div className="ev-muted" style={{ fontSize: 12 }}>
+                          Plan: <b>{u.plan}</b> · {u.created_at || ""}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : null}
+      </div>
+    );
+  }
+
   // =========================
   // GUARDS (NO duplicar lógica en el return)
   // =========================
@@ -1139,6 +1267,22 @@ function MainApp() {
         try { localStorage.removeItem(LS_TOKEN); } catch {}
         return;
       }
+      // ✅ PATCH 2: 403 NO desloguea. Se usa para gating (términos/plan/etc)
+      if (e?.status === 403 || e?.message === "FORBIDDEN") {
+        const msg = String(e?.detail || e?.message || "");
+
+        // Si el backend manda un detalle tipo "Debes aceptar términos..."
+        // abrimos modal de términos de forma determinista:
+        if (/t[eé]rminos|terms/i.test(msg)) {
+          setTermsErr("");
+          setTermsChecked(false);
+          setTermsOpen(true);
+        } else {
+          // 403 por otra razón (plan/bloqueo) -> mostramos error sin logout
+          setError(msg || "Acceso prohibido (403).");
+        }
+        return;
+      }
       // no rompas UI por fallas no críticas
     }
   }
@@ -1437,6 +1581,21 @@ function MainApp() {
         setNotice("");
         setError("Tu sesión fue revocada o expiró. Inicia sesión de nuevo.");
         try { localStorage.removeItem(LS_TOKEN); } catch {}
+        return;
+      }
+
+      // ✅ PATCH 2: 403 no desloguea. Si es términos, abrimos modal.
+      if (res.status === 403) {
+        const raw = await res.text().catch(() => "");
+        let data = null;
+        try { data = raw ? JSON.parse(raw) : null; } catch { data = null; }
+        const detail = String(data?.detail || raw || "Acceso prohibido (403).");
+
+        if (/t[eé]rminos|terms/i.test(detail)) {
+          setTermsErr("");
+          setTermsChecked(false);
+          setTermsOpen(true);
+        }
         return;
       }
 
@@ -2130,16 +2289,33 @@ function MainApp() {
         data = null;
       }
 
-      if (!res.ok) {
-        const detailRaw = data?.detail ?? data?.message ?? rawText ?? `HTTP ${res.status}`;
-        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw, null, 2);
-        throw new Error(`Chat error ${res.status}: ${detail}`);
-      }
-
+      // ✅ PATCH 2: manejar primero auth/gating
       if (res.status === 401) {
         try { localStorage.removeItem(LS_TOKEN); } catch {}
         setToken(""); setMe(null); setUsage(null);
         throw new Error("Sesión expirada. Inicia sesión de nuevo.");
+      }
+
+      if (res.status === 403) {
+        const detailRaw = data?.detail ?? data?.message ?? rawText ?? "Acceso prohibido (403).";
+        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw, null, 2);
+
+        // Si es términos => abrir modal (NO logout)
+        if (/t[eé]rminos|terms/i.test(detail)) {
+          setTermsErr("");
+          setTermsChecked(false);
+          setTermsOpen(true);
+          throw new Error("Debes aceptar Términos y Condiciones para usar el chat.");
+        }
+
+        throw new Error(detail);
+      }
+
+      // ✅ luego el error general
+      if (!res.ok) {
+        const detailRaw = data?.detail ?? data?.message ?? rawText ?? `HTTP ${res.status}`;
+        const detail = typeof detailRaw === "string" ? detailRaw : JSON.stringify(detailRaw, null, 2);
+        throw new Error(`Chat error ${res.status}: ${detail}`);
       }
 
       const answer = ((data?.response ?? "") + "").trim() || "(Sin respuesta)";
@@ -2997,6 +3173,10 @@ export default function AppRouter() {
 
   if (pathname === "/reset-password") {
     return <ResetPasswordScreen API_BASE={API_BASE} />;
+  }
+
+  if (pathname === "/admin") {
+    return <AdminScreen API_BASE={API_BASE} />;
   }
 
   return <MainApp />;
