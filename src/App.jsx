@@ -982,6 +982,11 @@ function AdminScreen({ API_BASE }) {
   const [users, setUsers] = useState([]);
   const [busy, setBusy] = useState(false);
   const [retryTick, setRetryTick] = useState(0);
+  // ✅ Admin metrics (/admin/metrics)
+  const [metrics, setMetrics] = useState(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsErr, setMetricsErr] = useState("");
+  const [metricsDays, setMetricsDays] = useState(30); // ventana (días)
 
   // Siempre toma el token “vivo” (no lo congeles en useState)
   const token = useMemo(() => {
@@ -1012,6 +1017,54 @@ function AdminScreen({ API_BASE }) {
       data = null;
     }
     return { raw, data };
+  }
+
+  async function fetchAdminMetrics(days = 30) {
+    const d = Math.max(1, Math.min(Number(days || 30), 180));
+    setMetricsLoading(true);
+    setMetricsErr("");
+
+    try {
+      if (!token) {
+        setMetrics(null);
+        setMetricsErr("No hay sesión activa.");
+        return;
+      }
+
+      const r = await fetch(`${API_BASE}/admin/metrics?days=${d}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      const { raw, data } = await readTextJson(r);
+
+      if (r.status === 401) {
+        setMetrics(null);
+        setMetricsErr("Sesión expirada o inválida.");
+        return;
+      }
+      if (r.status === 403) {
+        const detail = String(data?.detail || raw || "Requiere rol admin.");
+        setMetrics(null);
+        setMetricsErr(detail);
+        return;
+      }
+      if (!r.ok) {
+        const detail = String(data?.detail || raw || `HTTP ${r.status}`);
+        throw new Error(detail);
+      }
+
+      // tu endpoint debe devolver { ok: true, ... }
+      if (data && data.ok === false) {
+        throw new Error(String(data?.detail || "Respuesta inválida en /admin/metrics"));
+      }
+
+      setMetrics(data);
+    } catch (e) {
+      setMetrics(null);
+      setMetricsErr(e?.message || "No se pudieron cargar métricas.");
+    } finally {
+      setMetricsLoading(false);
+    }
   }
 
   async function fetchAdmin() {
@@ -1086,6 +1139,9 @@ function AdminScreen({ API_BASE }) {
       }
 
       setOverview(j1);
+      // 2.5) /admin/metrics
+      setNotice("Cargando métricas (events)…");
+      await fetchAdminMetrics(metricsDays);
 
       // 3) /admin/users
       setNotice("Cargando usuarios…");
@@ -1187,6 +1243,93 @@ function AdminScreen({ API_BASE }) {
                   Server time: {overview?.server_time_utc || "—"}
                 </div>
               </div>
+            </div>
+          </div>
+          {/* ✅ NUEVO: Métricas (events) */}
+          <div className="ev-card">
+            <div className="ev-card-h">
+              <div>
+                <div className="ev-card-t">Métricas</div>
+                <div className="ev-card-d">Actividad y funnel (events)</div>
+              </div>
+
+              <div className="ev-row" style={{ gap: 8 }}>
+                <select
+                  className="ev-select"
+                  value={metricsDays}
+                  onChange={(e) => setMetricsDays(Number(e.target.value || 30))}
+                  disabled={busy || metricsLoading}
+                >
+                  <option value={7}>7d</option>
+                  <option value={30}>30d</option>
+                  <option value={90}>90d</option>
+                  <option value={180}>180d</option>
+                </select>
+
+                <button
+                  className="ev-btn"
+                  onClick={() => fetchAdminMetrics(metricsDays)}
+                  disabled={busy || metricsLoading}
+                >
+                  {metricsLoading ? "Cargando…" : "Refrescar"}
+                </button>
+              </div>
+            </div>
+
+            <div className="ev-card-b">
+              {metricsLoading ? (
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Cargando métricas…
+                </div>
+              ) : metricsErr ? (
+                <div className="ev-alert err">
+                  <span className="k">Error:</span> {metricsErr}
+                </div>
+              ) : metrics ? (
+                <div style={{ display: "grid", gap: 10 }}>
+                  <div className="ev-row" style={{ gap: 10, flexWrap: "wrap" }}>
+                    <span className="ev-pill">DAU: <b>{metrics?.dau ?? 0}</b></span>
+                    <span className="ev-pill">WAU: <b>{metrics?.wau ?? 0}</b></span>
+                    <span className="ev-pill">MAU: <b>{metrics?.mau ?? 0}</b></span>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ fontWeight: 900 }}>Funnel {metrics?.window_days ?? metricsDays}d</div>
+                    <div>Registrados: <b>{metrics?.funnel_30d?.registered ?? metrics?.funnel?.registered ?? 0}</b></div>
+                    <div>Login: <b>{metrics?.funnel_30d?.logged_in ?? metrics?.funnel?.logged_in ?? 0}</b></div>
+                    <div>Lección: <b>{metrics?.funnel_30d?.generated_lesson ?? metrics?.funnel?.generated_lesson ?? 0}</b></div>
+                  </div>
+
+                  <div style={{ display: "grid", gap: 6 }}>
+                    <div style={{ fontWeight: 900 }}>Eventos (top)</div>
+
+                    {Object.entries(metrics?.usage || {}).length === 0 ? (
+                      <div className="ev-muted" style={{ fontSize: 12 }}>
+                        Sin eventos aún.
+                      </div>
+                    ) : (
+                      <div style={{ maxHeight: 220, overflow: "auto", display: "grid", gap: 6 }}>
+                        {Object.entries(metrics.usage).map(([k, v]) => (
+                          <div key={k} className="ev-row" style={{ justifyContent: "space-between" }}>
+                            <span style={{ fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace", fontSize: 12 }}>
+                              {k}
+                            </span>
+                            <b>{v}</b>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="ev-muted" style={{ fontSize: 12 }}>
+                    Server time: {metrics?.server_time_utc || "—"}
+                  </div>
+                </div>
+              ) : (
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Sin datos.
+                </div>
+              )}
             </div>
           </div>
 
