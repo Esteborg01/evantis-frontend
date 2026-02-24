@@ -785,126 +785,6 @@ function ResetPasswordScreen({ API_BASE }) {
     })();
   }, [API_BASE, tokenQ]);
 
-  function AdminScreen({ API_BASE }) {
-    const [token] = useState(localStorage.getItem(LS_TOKEN) || "");
-    const [notice, setNotice] = useState("Cargando dashboard…");
-    const [error, setError] = useState("");
-    const [overview, setOverview] = useState(null);
-    const [users, setUsers] = useState([]);
-
-    useEffect(() => {
-      (async () => {
-        try {
-          setError("");
-          if (!token) {
-            setNotice("");
-            setError("No hay sesión. Inicia sesión primero.");
-            return;
-          }
-
-          // Overview
-          const r1 = await fetch(`${API_BASE}/admin/overview`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const t1 = await r1.text();
-          let j1 = null;
-          try { j1 = t1 ? JSON.parse(t1) : null; } catch { j1 = null; }
-
-          if (!r1.ok) {
-            const detail = j1?.detail || t1 || `HTTP ${r1.status}`;
-            throw new Error(detail);
-          }
-          setOverview(j1);
-
-          // Users
-          const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          const t2 = await r2.text();
-          let j2 = null;
-          try { j2 = t2 ? JSON.parse(t2) : null; } catch { j2 = null; }
-          if (r2.ok) setUsers(Array.isArray(j2?.items) ? j2.items : []);
-
-          setNotice("");
-        } catch (e) {
-          setNotice("");
-          setError(e?.message || "No se pudo cargar admin.");
-        }
-      })();
-    }, [API_BASE, token]);
-
-    return (
-      <div className="ev-wrap">
-        <div className="ev-topbar">
-          <div className="ev-brand">
-            <div className="ev-logo" />
-            <div>
-              <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Admin</div>
-            </div>
-          </div>
-
-          <div className="ev-row">
-            <button className="ev-btn" onClick={() => window.location.replace("/")}>
-              Volver a la app
-            </button>
-          </div>
-        </div>
-
-        <Banner notice={notice} error={error} />
-
-        {overview ? (
-          <div className="ev-grid" style={{ marginTop: 14 }}>
-            <div className="ev-card">
-              <div className="ev-card-h">
-                <div>
-                  <div className="ev-card-t">Overview</div>
-                  <div className="ev-card-d">Estado general</div>
-                </div>
-              </div>
-              <div className="ev-card-b">
-                <div style={{ display: "grid", gap: 8 }}>
-                  <div><b>Usuarios totales:</b> {overview?.users?.total ?? "—"}</div>
-                  <div><b>Nuevos 7d:</b> {overview?.users?.new_7d ?? "—"}</div>
-                  <div><b>Uso mensual:</b> {overview?.usage_month ? JSON.stringify(overview.usage_month) : "—"}</div>
-                  <div className="ev-muted" style={{ fontSize: 12 }}>
-                    Server time: {overview?.server_time_utc || "—"}
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="ev-card">
-              <div className="ev-card-h">
-                <div>
-                  <div className="ev-card-t">Últimos usuarios</div>
-                  <div className="ev-card-d">Top 50 por fecha</div>
-                </div>
-              </div>
-
-              <div className="ev-card-b">
-                {users.length === 0 ? (
-                  <div className="ev-muted" style={{ fontSize: 12 }}>Sin datos.</div>
-                ) : (
-                  <div style={{ display: "grid", gap: 8 }}>
-                    {users.map((u) => (
-                      <div key={u.id} className="ev-card" style={{ padding: 10 }}>
-                        <div style={{ fontWeight: 800 }}>{u.email}</div>
-                        <div className="ev-muted" style={{ fontSize: 12 }}>
-                          Plan: <b>{u.plan}</b> · {u.created_at || ""}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-        ) : null}
-      </div>
-    );
-  }
-
   // =========================
   // GUARDS (NO duplicar lógica en el return)
   // =========================
@@ -975,6 +855,118 @@ function ResetPasswordScreen({ API_BASE }) {
     );
   }
 
+function AdminScreen({ API_BASE }) {
+  const [token] = useState(localStorage.getItem(LS_TOKEN) || "");
+  const [notice, setNotice] = useState("Cargando dashboard…");
+  const [error, setError] = useState("");
+  const [overview, setOverview] = useState(null);
+  const [users, setUsers] = useState([]);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        setError("");
+        if (!token) {
+          setNotice("");
+          setError("No hay sesión. Inicia sesión primero.");
+          return;
+        }
+
+        const r1 = await fetch(`${API_BASE}/admin/overview`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const t1 = await r1.text();
+        let j1 = null;
+        try { j1 = t1 ? JSON.parse(t1) : null; } catch { j1 = null; }
+        if (!r1.ok) throw new Error(j1?.detail || t1 || `HTTP ${r1.status}`);
+        setOverview(j1);
+
+        const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        const t2 = await r2.text();
+        let j2 = null;
+        try { j2 = t2 ? JSON.parse(t2) : null; } catch { j2 = null; }
+        if (r2.ok) setUsers(Array.isArray(j2?.items) ? j2.items : []);
+
+        setNotice("");
+      } catch (e) {
+        setNotice("");
+        setError(e?.message || "No se pudo cargar admin.");
+      }
+    })();
+  }, [API_BASE, token]);
+
+  return (
+    <div className="ev-wrap">
+      <div className="ev-topbar">
+        <div className="ev-brand">
+          <div className="ev-logo" />
+          <div>
+            <div className="ev-title">E-Vantis</div>
+            <div className="ev-sub">Admin</div>
+          </div>
+        </div>
+
+        <div className="ev-row">
+          <button className="ev-btn" onClick={() => window.location.replace("/")}>
+            Volver a la app
+          </button>
+        </div>
+      </div>
+
+      <Banner notice={notice} error={error} />
+
+      {overview ? (
+        <div className="ev-grid" style={{ marginTop: 14 }}>
+          <div className="ev-card">
+            <div className="ev-card-h">
+              <div>
+                <div className="ev-card-t">Overview</div>
+                <div className="ev-card-d">Estado general</div>
+              </div>
+            </div>
+            <div className="ev-card-b">
+              <div style={{ display: "grid", gap: 8 }}>
+                <div><b>Usuarios totales:</b> {overview?.users?.total ?? "—"}</div>
+                <div><b>Nuevos 7d:</b> {overview?.users?.new_7d ?? "—"}</div>
+                <div><b>Uso mensual:</b> {overview?.usage_month ? JSON.stringify(overview.usage_month) : "—"}</div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Server time: {overview?.server_time_utc || "—"}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="ev-card">
+            <div className="ev-card-h">
+              <div>
+                <div className="ev-card-t">Últimos usuarios</div>
+                <div className="ev-card-d">Top 50 por fecha</div>
+              </div>
+            </div>
+            <div className="ev-card-b">
+              {users.length === 0 ? (
+                <div className="ev-muted" style={{ fontSize: 12 }}>Sin datos.</div>
+              ) : (
+                <div style={{ display: "grid", gap: 8 }}>
+                  {users.map((u) => (
+                    <div key={u.id} className="ev-card" style={{ padding: 10 }}>
+                      <div style={{ fontWeight: 800 }}>{u.email}</div>
+                      <div className="ev-muted" style={{ fontSize: 12 }}>
+                        Plan: <b>{u.plan}</b> · {u.created_at || ""}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
   // =========================
   // Token válido => Formulario
   // =========================
