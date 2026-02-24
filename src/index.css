@@ -59,11 +59,11 @@ body{
   gap: 12px;
 }
 
-.ev-logo{
+.ev-logo-img{
   width: 42px;
   height: 42px;
   border-radius: 14px;
-  background: linear-gradient(135deg, var(--accent), #5865ff, #a021ff);
+  object-fit: cover;
   box-shadow: 0 12px 30px rgba(30,203,225,0.25);
 }
 

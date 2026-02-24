@@ -707,7 +707,11 @@ function VerifyEmailScreen({ API_BASE }) {
     <div className="ev-wrap">
       <div className="ev-topbar">
         <div className="ev-brand">
-          <div className="ev-logo" />
+          <img
+            src="/logo.png"
+            alt="E-Vantis"
+            className="ev-logo-img"
+          />
           <div>
             <div className="ev-title">E-Vantis</div>
             <div className="ev-sub">Verificación de correo</div>
