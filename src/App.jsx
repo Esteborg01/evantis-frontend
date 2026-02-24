@@ -975,98 +975,146 @@ function ResetPasswordScreen({ API_BASE }) {
 }
 
 function AdminScreen({ API_BASE }) {
-  const token = localStorage.getItem(LS_TOKEN) || "";
+  const API_KEY = import.meta.env.VITE_API_KEY || "";
+
   const [notice, setNotice] = useState("Cargando dashboard…");
   const [error, setError] = useState("");
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
 
-  // ✅ Guard: Admin requiere API Key
-  if (!API_KEY) {
-    return (
-      <div className="ev-wrap">
-        <div className="ev-topbar">
-          <div className="ev-brand">
-            <div className="ev-logo" />
-            <div>
-              <div className="ev-title">E-Vantis</div>
-              <div className="ev-sub">Admin</div>
-            </div>
-          </div>
-          <div className="ev-row">
-            <button className="ev-btn" onClick={() => window.location.replace("/")}>
-              Volver a la app
-            </button>
-          </div>
-        </div>
+  function getToken() {
+    try {
+      return (localStorage.getItem(LS_TOKEN) || "").trim();
+    } catch {
+      return "";
+    }
+  }
 
-        <Banner
-          notice={""}
-          error={"Falta VITE_API_KEY en el frontend. Configúrala en Render y reconstruye."}
-        />
-      </div>
-    );
+  async function readBodySafe(res) {
+    const raw = await res.text().catch(() => "");
+    if (!raw) return { raw: "", json: null };
+    try {
+      return { raw, json: JSON.parse(raw) };
+    } catch {
+      return { raw, json: null };
+    }
+  }
+
+  function normalizeDetail(raw, json, fallback = "") {
+    const d = json?.detail ?? json?.message ?? fallback ?? "";
+    if (typeof d === "string" && d.trim()) return d.trim();
+    if (d && typeof d === "object") return JSON.stringify(d);
+    if (raw && raw.trim()) return raw.trim();
+    return fallback || "Error desconocido";
   }
 
   useEffect(() => {
+    const ac = new AbortController();
+
     (async () => {
       try {
         setError("");
+        setOverview(null);
+        setUsers([]);
 
+        const token = getToken();
         if (!token) {
           setNotice("");
-          setError("No hay sesión activa. Inicia sesión primero.");
+          setError("No hay sesión. Inicia sesión primero.");
           return;
         }
 
-        // =========================
-        // OVERVIEW
-        // =========================
+        // Si tu backend exige X-API-Key en admin, esto te evita el “Falta X-API-Key”.
+        // Si NO la exige, mandarla no estorba.
+        if (!API_KEY) {
+          // No abortamos automáticamente porque depende de tu backend.
+          // Pero te lo mostramos para que no pierdas tiempo.
+          setNotice("");
+          setError("Falta VITE_API_KEY en el frontend (Render env). Admin puede requerir X-API-Key.");
+          return;
+        }
+
+        const headers = {
+          Authorization: `Bearer ${token}`,
+          "X-API-Key": API_KEY,
+        };
+
+        // 1) Overview
         const r1 = await fetch(`${API_BASE}/admin/overview`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-API-Key": API_KEY,
-          },
+          method: "GET",
+          headers,
+          signal: ac.signal,
         });
 
-        const t1 = await r1.text();
-        let j1 = null;
-        try { j1 = t1 ? JSON.parse(t1) : null; } catch { j1 = null; }
+        const b1 = await readBodySafe(r1);
+
+        if (r1.status === 401) {
+          setNotice("");
+          setError("Sesión expirada o inválida. Inicia sesión de nuevo.");
+          try { localStorage.removeItem(LS_TOKEN); } catch {}
+          // redirige a login (tu UI usa querystring)
+          window.location.replace("/?auth=login");
+          return;
+        }
+
+        if (r1.status === 403) {
+          const msg = normalizeDetail(b1.raw, b1.json, "Acceso prohibido (403).");
+          setNotice("");
+          setError(msg || "Requiere rol admin");
+          return;
+        }
 
         if (!r1.ok) {
-          const detail = j1?.detail || t1 || `HTTP ${r1.status}`;
-          throw new Error(detail);
+          const msg = normalizeDetail(b1.raw, b1.json, `HTTP ${r1.status}`);
+          throw new Error(msg);
         }
 
-        setOverview(j1);
+        setOverview(b1.json || {});
 
-        // =========================
-        // USERS
-        // =========================
+        // 2) Users
         const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "X-API-Key": API_KEY,
-          },
+          method: "GET",
+          headers,
+          signal: ac.signal,
         });
 
-        const t2 = await r2.text();
-        let j2 = null;
-        try { j2 = t2 ? JSON.parse(t2) : null; } catch { j2 = null; }
+        const b2 = await readBodySafe(r2);
 
-        if (!r2.ok) {
-          const detail = j2?.detail || t2 || `HTTP ${r2.status}`;
-          throw new Error(detail);
+        if (r2.status === 401) {
+          setNotice("");
+          setError("Sesión expirada o inválida. Inicia sesión de nuevo.");
+          try { localStorage.removeItem(LS_TOKEN); } catch {}
+          window.location.replace("/?auth=login");
+          return;
         }
 
-        setUsers(Array.isArray(j2?.items) ? j2.items : []);
+        if (r2.status === 403) {
+          // Si overview pasó, esto rara vez fallará, pero lo manejamos.
+          const msg = normalizeDetail(b2.raw, b2.json, "Acceso prohibido (403).");
+          setNotice("");
+          setError(msg || "Requiere rol admin");
+          return;
+        }
+
+        if (r2.ok) {
+          const items = Array.isArray(b2.json?.items) ? b2.json.items : [];
+          setUsers(items);
+        } else {
+          // users es “nice to have”; no tumba todo el admin si falla
+          // (si quieres que sí tumbe, cambia esto por throw)
+          console.warn("admin/users failed:", r2.status, b2.raw);
+        }
+
         setNotice("");
       } catch (e) {
+        if (ac.signal.aborted) return;
         setNotice("");
-        setError(e?.message || "No se pudo cargar el panel admin.");
+        setError(e?.message || "No se pudo cargar admin.");
       }
     })();
-  }, [API_BASE, token]);
+
+    return () => ac.abort();
+  }, [API_BASE, API_KEY]);
 
   return (
     <div className="ev-wrap">
@@ -1090,7 +1138,6 @@ function AdminScreen({ API_BASE }) {
 
       {overview ? (
         <div className="ev-grid" style={{ marginTop: 14 }}>
-          {/* OVERVIEW CARD */}
           <div className="ev-card">
             <div className="ev-card-h">
               <div>
@@ -1102,12 +1149,7 @@ function AdminScreen({ API_BASE }) {
               <div style={{ display: "grid", gap: 8 }}>
                 <div><b>Usuarios totales:</b> {overview?.users?.total ?? "—"}</div>
                 <div><b>Nuevos 7d:</b> {overview?.users?.new_7d ?? "—"}</div>
-                <div>
-                  <b>Uso mensual:</b>{" "}
-                  {overview?.usage_month
-                    ? JSON.stringify(overview.usage_month)
-                    : "—"}
-                </div>
+                <div><b>Uso mensual:</b> {overview?.usage_month ? JSON.stringify(overview.usage_month) : "—"}</div>
                 <div className="ev-muted" style={{ fontSize: 12 }}>
                   Server time: {overview?.server_time_utc || "—"}
                 </div>
@@ -1115,7 +1157,6 @@ function AdminScreen({ API_BASE }) {
             </div>
           </div>
 
-          {/* USERS CARD */}
           <div className="ev-card">
             <div className="ev-card-h">
               <div>
@@ -1125,9 +1166,7 @@ function AdminScreen({ API_BASE }) {
             </div>
             <div className="ev-card-b">
               {users.length === 0 ? (
-                <div className="ev-muted" style={{ fontSize: 12 }}>
-                  Sin datos.
-                </div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>Sin datos.</div>
               ) : (
                 <div style={{ display: "grid", gap: 8 }}>
                   {users.map((u) => (
