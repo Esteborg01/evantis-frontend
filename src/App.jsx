@@ -975,146 +975,118 @@ function ResetPasswordScreen({ API_BASE }) {
 }
 
 function AdminScreen({ API_BASE }) {
-  const API_KEY = import.meta.env.VITE_API_KEY || "";
-
   const [notice, setNotice] = useState("Cargando dashboard…");
   const [error, setError] = useState("");
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
 
-  function getToken() {
-    try {
-      return (localStorage.getItem(LS_TOKEN) || "").trim();
-    } catch {
-      return "";
-    }
-  }
+  // helper: token SIEMPRE fresco
+  const getToken = () => (localStorage.getItem(LS_TOKEN) || "").trim();
 
-  async function readBodySafe(res) {
+  // helper: fetch seguro
+  async function fetchJsonSafe(url, { method = "GET", headers = {}, body } = {}) {
+    const res = await fetch(url, { method, headers, body });
     const raw = await res.text().catch(() => "");
-    if (!raw) return { raw: "", json: null };
+    let data = null;
     try {
-      return { raw, json: JSON.parse(raw) };
+      data = raw ? JSON.parse(raw) : null;
     } catch {
-      return { raw, json: null };
+      data = null;
     }
+    return { res, raw, data };
   }
 
-  function normalizeDetail(raw, json, fallback = "") {
-    const d = json?.detail ?? json?.message ?? fallback ?? "";
-    if (typeof d === "string" && d.trim()) return d.trim();
-    if (d && typeof d === "object") return JSON.stringify(d);
-    if (raw && raw.trim()) return raw.trim();
-    return fallback || "Error desconocido";
+  function normalizeDetail(raw, data, fallback = "") {
+    const d = data?.detail ?? data?.message ?? raw ?? fallback;
+    return typeof d === "string" ? d : JSON.stringify(d);
+  }
+
+  async function loadAdmin() {
+    setError("");
+    setOverview(null);
+    setUsers([]);
+
+    const token = getToken();
+    if (!token) {
+      setNotice("");
+      setError("No hay sesión activa. Inicia sesión primero.");
+      return;
+    }
+
+    // Si tu backend requiere X-API-Key para todo lo protegido, aquí es obligatorio.
+    if (!API_KEY) {
+      setNotice("");
+      setError("Falta VITE_API_KEY en el frontend. Sin esto, /admin/* devolverá 403.");
+      return;
+    }
+
+    setNotice("Cargando dashboard…");
+
+    const commonHeaders = {
+      Authorization: `Bearer ${token}`,
+      "X-API-Key": API_KEY,
+    };
+
+    try {
+      const [r1, r2] = await Promise.all([
+        fetchJsonSafe(`${API_BASE}/admin/overview`, { headers: commonHeaders }),
+        fetchJsonSafe(`${API_BASE}/admin/users?limit=50`, { headers: commonHeaders }),
+      ]);
+
+      // ---- overview (r1)
+      if (r1.res.status === 401) {
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        setNotice("");
+        setError("Sesión expirada o revocada. Inicia sesión de nuevo.");
+        return;
+      }
+
+      if (r1.res.status === 403) {
+        setNotice("");
+        const msg = normalizeDetail(r1.raw, r1.data, "Acceso prohibido (403).");
+
+        // Mensaje específico si el backend lo manda
+        if (/admin/i.test(msg) || /rol/i.test(msg)) {
+          setError("Requiere rol admin.");
+        } else if (/api[-\s]*key|x-api-key/i.test(msg)) {
+          setError("Falta o es inválida la X-API-Key en el request.");
+        } else {
+          setError(msg);
+        }
+        return;
+      }
+
+      if (!r1.res.ok) {
+        setNotice("");
+        setError(normalizeDetail(r1.raw, r1.data, `HTTP ${r1.res.status}`));
+        return;
+      }
+
+      setOverview(r1.data || {});
+
+      // ---- users (r2) (si falla NO tumba todo)
+      if (r2.res.ok) {
+        const items = Array.isArray(r2.data?.items) ? r2.data.items : [];
+        setUsers(items);
+      } else if (r2.res.status === 401) {
+        // si users da 401, tratamos igual como sesión expirada
+        try { localStorage.removeItem(LS_TOKEN); } catch {}
+        setNotice("");
+        setError("Sesión expirada o revocada. Inicia sesión de nuevo.");
+        return;
+      }
+
+      setNotice("");
+    } catch (e) {
+      setNotice("");
+      setError(e?.message || "No se pudo cargar admin.");
+    }
   }
 
   useEffect(() => {
-    const ac = new AbortController();
-
-    (async () => {
-      try {
-        setError("");
-        setOverview(null);
-        setUsers([]);
-
-        const token = getToken();
-        if (!token) {
-          setNotice("");
-          setError("No hay sesión. Inicia sesión primero.");
-          return;
-        }
-
-        // Si tu backend exige X-API-Key en admin, esto te evita el “Falta X-API-Key”.
-        // Si NO la exige, mandarla no estorba.
-        if (!API_KEY) {
-          // No abortamos automáticamente porque depende de tu backend.
-          // Pero te lo mostramos para que no pierdas tiempo.
-          setNotice("");
-          setError("Falta VITE_API_KEY en el frontend (Render env). Admin puede requerir X-API-Key.");
-          return;
-        }
-
-        const headers = {
-          Authorization: `Bearer ${token}`,
-          "X-API-Key": API_KEY,
-        };
-
-        // 1) Overview
-        const r1 = await fetch(`${API_BASE}/admin/overview`, {
-          method: "GET",
-          headers,
-          signal: ac.signal,
-        });
-
-        const b1 = await readBodySafe(r1);
-
-        if (r1.status === 401) {
-          setNotice("");
-          setError("Sesión expirada o inválida. Inicia sesión de nuevo.");
-          try { localStorage.removeItem(LS_TOKEN); } catch {}
-          // redirige a login (tu UI usa querystring)
-          window.location.replace("/?auth=login");
-          return;
-        }
-
-        if (r1.status === 403) {
-          const msg = normalizeDetail(b1.raw, b1.json, "Acceso prohibido (403).");
-          setNotice("");
-          setError(msg || "Requiere rol admin");
-          return;
-        }
-
-        if (!r1.ok) {
-          const msg = normalizeDetail(b1.raw, b1.json, `HTTP ${r1.status}`);
-          throw new Error(msg);
-        }
-
-        setOverview(b1.json || {});
-
-        // 2) Users
-        const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
-          method: "GET",
-          headers,
-          signal: ac.signal,
-        });
-
-        const b2 = await readBodySafe(r2);
-
-        if (r2.status === 401) {
-          setNotice("");
-          setError("Sesión expirada o inválida. Inicia sesión de nuevo.");
-          try { localStorage.removeItem(LS_TOKEN); } catch {}
-          window.location.replace("/?auth=login");
-          return;
-        }
-
-        if (r2.status === 403) {
-          // Si overview pasó, esto rara vez fallará, pero lo manejamos.
-          const msg = normalizeDetail(b2.raw, b2.json, "Acceso prohibido (403).");
-          setNotice("");
-          setError(msg || "Requiere rol admin");
-          return;
-        }
-
-        if (r2.ok) {
-          const items = Array.isArray(b2.json?.items) ? b2.json.items : [];
-          setUsers(items);
-        } else {
-          // users es “nice to have”; no tumba todo el admin si falla
-          // (si quieres que sí tumbe, cambia esto por throw)
-          console.warn("admin/users failed:", r2.status, b2.raw);
-        }
-
-        setNotice("");
-      } catch (e) {
-        if (ac.signal.aborted) return;
-        setNotice("");
-        setError(e?.message || "No se pudo cargar admin.");
-      }
-    })();
-
-    return () => ac.abort();
-  }, [API_BASE, API_KEY]);
+    loadAdmin();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [API_BASE]);
 
   return (
     <div className="ev-wrap">
@@ -1130,6 +1102,9 @@ function AdminScreen({ API_BASE }) {
         <div className="ev-row">
           <button className="ev-btn" onClick={() => window.location.replace("/")}>
             Volver a la app
+          </button>
+          <button className="ev-btn" onClick={loadAdmin}>
+            Reintentar
           </button>
         </div>
       </div>
@@ -1181,6 +1156,13 @@ function AdminScreen({ API_BASE }) {
               )}
             </div>
           </div>
+        </div>
+      ) : null}
+
+      {import.meta.env.DEV ? (
+        <div className="ev-muted" style={{ marginTop: 12, fontSize: 12 }}>
+          Debug: API_BASE={API_BASE} · token? {String(!!(localStorage.getItem(LS_TOKEN) || ""))} · API_KEY?{" "}
+          {String(!!API_KEY)}
         </div>
       ) : null}
     </div>
