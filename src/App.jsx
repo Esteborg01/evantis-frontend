@@ -975,43 +975,95 @@ function ResetPasswordScreen({ API_BASE }) {
 }
 
 function AdminScreen({ API_BASE }) {
-  const [token] = useState(localStorage.getItem(LS_TOKEN) || "");
+  const token = localStorage.getItem(LS_TOKEN) || "";
   const [notice, setNotice] = useState("Cargando dashboard…");
   const [error, setError] = useState("");
   const [overview, setOverview] = useState(null);
   const [users, setUsers] = useState([]);
 
+  // ✅ Guard: Admin requiere API Key
+  if (!API_KEY) {
+    return (
+      <div className="ev-wrap">
+        <div className="ev-topbar">
+          <div className="ev-brand">
+            <div className="ev-logo" />
+            <div>
+              <div className="ev-title">E-Vantis</div>
+              <div className="ev-sub">Admin</div>
+            </div>
+          </div>
+          <div className="ev-row">
+            <button className="ev-btn" onClick={() => window.location.replace("/")}>
+              Volver a la app
+            </button>
+          </div>
+        </div>
+
+        <Banner
+          notice={""}
+          error={"Falta VITE_API_KEY en el frontend. Configúrala en Render y reconstruye."}
+        />
+      </div>
+    );
+  }
+
   useEffect(() => {
     (async () => {
       try {
         setError("");
+
         if (!token) {
           setNotice("");
-          setError("No hay sesión. Inicia sesión primero.");
+          setError("No hay sesión activa. Inicia sesión primero.");
           return;
         }
 
+        // =========================
+        // OVERVIEW
+        // =========================
         const r1 = await fetch(`${API_BASE}/admin/overview`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-API-Key": API_KEY,
+          },
         });
+
         const t1 = await r1.text();
         let j1 = null;
         try { j1 = t1 ? JSON.parse(t1) : null; } catch { j1 = null; }
-        if (!r1.ok) throw new Error(j1?.detail || t1 || `HTTP ${r1.status}`);
+
+        if (!r1.ok) {
+          const detail = j1?.detail || t1 || `HTTP ${r1.status}`;
+          throw new Error(detail);
+        }
+
         setOverview(j1);
 
+        // =========================
+        // USERS
+        // =========================
         const r2 = await fetch(`${API_BASE}/admin/users?limit=50`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "X-API-Key": API_KEY,
+          },
         });
+
         const t2 = await r2.text();
         let j2 = null;
         try { j2 = t2 ? JSON.parse(t2) : null; } catch { j2 = null; }
-        if (r2.ok) setUsers(Array.isArray(j2?.items) ? j2.items : []);
 
+        if (!r2.ok) {
+          const detail = j2?.detail || t2 || `HTTP ${r2.status}`;
+          throw new Error(detail);
+        }
+
+        setUsers(Array.isArray(j2?.items) ? j2.items : []);
         setNotice("");
       } catch (e) {
         setNotice("");
-        setError(e?.message || "No se pudo cargar admin.");
+        setError(e?.message || "No se pudo cargar el panel admin.");
       }
     })();
   }, [API_BASE, token]);
@@ -1038,6 +1090,7 @@ function AdminScreen({ API_BASE }) {
 
       {overview ? (
         <div className="ev-grid" style={{ marginTop: 14 }}>
+          {/* OVERVIEW CARD */}
           <div className="ev-card">
             <div className="ev-card-h">
               <div>
@@ -1049,7 +1102,12 @@ function AdminScreen({ API_BASE }) {
               <div style={{ display: "grid", gap: 8 }}>
                 <div><b>Usuarios totales:</b> {overview?.users?.total ?? "—"}</div>
                 <div><b>Nuevos 7d:</b> {overview?.users?.new_7d ?? "—"}</div>
-                <div><b>Uso mensual:</b> {overview?.usage_month ? JSON.stringify(overview.usage_month) : "—"}</div>
+                <div>
+                  <b>Uso mensual:</b>{" "}
+                  {overview?.usage_month
+                    ? JSON.stringify(overview.usage_month)
+                    : "—"}
+                </div>
                 <div className="ev-muted" style={{ fontSize: 12 }}>
                   Server time: {overview?.server_time_utc || "—"}
                 </div>
@@ -1057,6 +1115,7 @@ function AdminScreen({ API_BASE }) {
             </div>
           </div>
 
+          {/* USERS CARD */}
           <div className="ev-card">
             <div className="ev-card-h">
               <div>
@@ -1066,7 +1125,9 @@ function AdminScreen({ API_BASE }) {
             </div>
             <div className="ev-card-b">
               {users.length === 0 ? (
-                <div className="ev-muted" style={{ fontSize: 12 }}>Sin datos.</div>
+                <div className="ev-muted" style={{ fontSize: 12 }}>
+                  Sin datos.
+                </div>
               ) : (
                 <div style={{ display: "grid", gap: 8 }}>
                   {users.map((u) => (
