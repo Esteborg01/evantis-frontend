@@ -854,6 +854,7 @@ function ResetPasswordScreen({ API_BASE }) {
       </div>
     );
   }
+}
 
 function AdminScreen({ API_BASE }) {
   const [token] = useState(localStorage.getItem(LS_TOKEN) || "");
@@ -967,6 +968,7 @@ function AdminScreen({ API_BASE }) {
     </div>
   );
 }
+
   // =========================
   // Token válido => Formulario
   // =========================
@@ -1095,7 +1097,6 @@ function AdminScreen({ API_BASE }) {
       </div>
     </div>
   );
-}
 
 function RequestResetScreen({ API_BASE, email, setEmail }) {
   const [notice, setNotice] = useState("");
