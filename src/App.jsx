@@ -51,6 +51,21 @@ function safeJsonParse(s, fallback) {
   }
 }
 
+function getGaClientIdFromCookie() {
+  try {
+    const m = document.cookie.match(/(?:^|; )_ga=([^;]+)/);
+    if (!m) return null;
+
+    const value = decodeURIComponent(m[1] || "");
+    // Formato típico: GA1.1.1234567890.1700000000
+    const parts = value.split(".");
+    if (parts.length >= 4) return `${parts[2]}.${parts[3]}`;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 function makeIdempotencyKey(prefix = "ev") {
   try {
     // navegadores modernos
@@ -1955,6 +1970,8 @@ function MainApp() {
 
     try {
       setNotice("Redirigiendo a pago seguro…");
+      // ✅ GA4 client_id (G4A)
+      const ga_client_id = getGaClientIdFromCookie();
 
       const res = await fetch(`${API_BASE}${BILLING_CHECKOUT_PATH}`, {
         method: "POST",
@@ -2006,6 +2023,9 @@ function MainApp() {
 
       setNotice("Redirigiendo a pago seguro…");
 
+      // ✅ GA4 client_id (G4A)
+      const ga_client_id = getGaClientIdFromCookie();
+
       const res = await fetch(`${API_BASE}${BILLING_CHECKOUT_PATH}`, {
         method: "POST",
         headers: {
@@ -2014,7 +2034,10 @@ function MainApp() {
           Authorization: `Bearer ${tkn}`,
           "Idempotency-Key": makeIdempotencyKey("checkout"),
         },
-        body: JSON.stringify({ plan: planSlug }), // "pro" | "premium"
+        body: JSON.stringify({
+          plan: planSlug,
+          ga_client_id: ga_client_id || null,
+        }),
       });
 
       const data = await res.json().catch(() => ({}));
@@ -2145,6 +2168,10 @@ function MainApp() {
       const form = new URLSearchParams();
       form.set("username", emailTrim);
       form.set("password", password);
+
+      // ✅ GA4 client_id (opcional)
+      const ga_client_id = getGaClientIdFromCookie();
+      if (ga_client_id) form.set("ga_client_id", ga_client_id);
 
       const resp = await fetch(`${API_BASE}${AUTH_LOGIN_PATH}`, {
         method: "POST",
