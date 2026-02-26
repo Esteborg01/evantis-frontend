@@ -3,22 +3,24 @@
   <head>
     <meta charset="UTF-8" />
 
-    <!-- Favicon -->
+    <!-- Google Analytics (MISMO ID QUE LANDING) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-7WV3VT097K"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-7WV3VT097K');
+    </script>
+
     <link rel="icon" type="image/png" href="/favicon.png" />
-
-    <!-- Responsive -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- Color institucional -->
     <meta name="theme-color" content="#0B132B" />
 
-    <!-- Título -->
     <title>E-Vantis</title>
   </head>
 
   <body>
     <div id="root"></div>
-
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>
